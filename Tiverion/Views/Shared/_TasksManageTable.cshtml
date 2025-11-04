@@ -1,0 +1,95 @@
+@model Tiverion.Models.ViewModels.TasksTableViewModel
+
+@*
+Подключается строкой:
+<partial name="_TaskManageTable" model = "tableModel"/>
+
+Где модель:
+var tableModel = new TasksTableViewModel(
+                ExistingTasks,
+                true
+            );
+*@
+
+@{
+    string FormatCoord(double? coord) => coord.HasValue ? coord.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) : "-";
+    string FormatArea(double areaM2)
+    {
+        if (!double.IsFinite(areaM2) || areaM2 <= 0) return "-";
+        if (areaM2 >= 1000000)
+        {
+            var km2 = areaM2 / 1000000;
+            return km2.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + " км²";
+        }
+        return areaM2.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + " м²";
+    }
+}
+
+<div class="responsive-table">
+    <table>
+        <thead>
+        <tr>
+            <th>Название</th>
+            <th>Интервал</th>
+            <th>Место</th>
+            <th>Время</th>
+            <th>Действия</th>
+        </tr>
+        </thead>
+        <tbody>
+        @if (Model.Tasks.Any())
+        {
+        foreach (var task in Model.Tasks)
+        {
+        <tr>
+            <td>@task.Name</td>
+            <td>@(task.Interval.TotalMinutes) мин</td>
+            <td>
+                <span>@task.Location.ToString()</span>
+            </td>
+            <td>
+                @{
+                var dateStamp = task.LastRun is null ? task.ActivationTime : (DateTime)task.LastRun;
+                string time = $"{dateStamp.Hour}:{dateStamp.Minute}";
+                }
+                @time
+            </td>
+            <td style="display:flex; gap:8px; flex-wrap:wrap;">
+                <a class="btn outline" href="@Url.Action("OpenTask", "Stats")?taskId=@task.Id">Загрузить</a>
+                @if (Model.NeedLaunchBtn)
+                {
+                <form asp-controller="Dashboard" asp-action="RunStatsTask" method="post" class="inline-form">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="taskId" value="@task.Id"/>
+                    <button type="submit" class="btn outline" style="color:var(--color-navlink-active-text)">Выполнить</button>
+                </form>
+                }
+                else
+                {
+                <form asp-action="Delete" method="post" class="inline-form" onsubmit="return confirm('Вы точно хотите удалить эту задачу?');">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="taskId" value="@task.Id"/>
+                    <button type="submit" class="btn outline" style="color:#c62828">Удалить</button>
+                </form>
+                }
+                <form asp-action="Enable" method="post" class="inline-form">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="taskId" value="@task.Id" />
+                    <input type="hidden" name="isEnabled" value="@(task.IsEnabled ? "false" : "true")" />
+                    <button type="submit" class="btn outline @(task.IsEnabled ? "positive" : "negative")">
+                        @(task.IsEnabled ? "Выключить" : "Включить")
+                    </button>
+                </form>
+            </td>
+        </tr>
+        }
+        }
+        else
+        {
+        <tr>
+            <td colspan="7" class="empty-table">Задачи отсутствуют</td>
+        </tr>
+        }
+        </tbody>
+    </table>
+</div>

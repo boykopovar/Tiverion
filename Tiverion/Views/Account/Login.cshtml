@@ -1,0 +1,36 @@
+@model string
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Login";
+}
+
+<partial name="_TopNav" />
+
+<section class="auth-panel">
+    <div class="panel-inner">
+        <h2 class="title">Вход</h2>
+
+        <partial name="_ShowTempData"/>
+
+
+        <form method="post" asp-controller="Account" asp-action="Login">
+            @Html.AntiForgeryToken()
+            <div class="form-row">
+                <label>Имя пользователя</label>
+                <input type="text" name="username" class="form-input" required />
+
+                <label>Пароль</label>
+                <input type="password" name="password" class="form-input" required />
+
+                <label>
+                    @Html.CheckBox("rememberMe")
+                    Запомнить меня
+                </label>
+            </div>
+
+            <button type="submit" class="btn primary">Войти</button>
+        </form>
+
+        <a asp-controller="Account" asp-action="Register" class="btn outline full-width-btn" style="margin-top:12px;">Зарегистрироваться</a>
+    </div>
+</section>

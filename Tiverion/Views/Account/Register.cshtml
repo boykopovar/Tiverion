@@ -1,0 +1,77 @@
+@model string
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Регистрация";
+    var invitationId = ViewData["InvitationId"] as string;
+}
+
+<partial name="_TopNav" />
+
+<section class="auth-panel">
+    <div class="panel-inner">
+        <h2 class="title">Регистрация</h2>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-error">@TempData["Error"]</div>
+        }
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success">@TempData["Success"]</div>
+        }
+
+        <form id="registerForm" method="post" asp-controller="Account" asp-action="Register">
+            @Html.AntiForgeryToken()
+            @if (!string.IsNullOrEmpty(invitationId))
+            {
+                <input type="hidden" name="invitationId" value="@invitationId" />
+            }
+
+            <div class="form-row">
+                <label>Имя пользователя</label>
+                <input type="text" name="username" class="form-input" required />
+
+                <label>Пароль</label>
+                <input type="password" name="password" class="form-input" required />
+
+                <label>Повторите пароль</label>
+                <input type="password" name="confirmPassword" class="form-input" required />
+            </div>
+
+            <button type="submit" class="btn primary">Зарегистрироваться</button>
+        </form>
+
+        <a asp-controller="Account" asp-action="Login" class="btn outline full-width-btn" style="margin-top:12px;">Войти</a>
+    </div>
+</section>
+
+
+@section Scripts {
+    <script>
+        document.getElementById("registerForm").addEventListener("submit", function(e) {
+            var form = e.target;
+            var username = form.username.value.trim();
+            var password = form.password.value;
+            var confirm = form.confirmPassword.value;
+            var usernamePattern = /^(?=.*[A-Za-z0-9])[A-Za-z0-9_]{3,40}$/;
+
+            if (!usernamePattern.test(username)) {
+                alert("Имя пользователя (3-40 символов) может содержать только латинские буквы, цифры и нижние подчеркивания, и не может состоять только из нижних подчеркиваний.");
+                e.preventDefault();
+                return;
+            }
+
+            if (password !== confirm) {
+                alert("Пароли не совпадают");
+                e.preventDefault();
+                return;
+            }
+
+            if (password.length < 6) {
+                alert("Пароль должен быть не меньше 6 символов");
+                e.preventDefault();
+                return;
+            }
+        });
+    </script>
+}

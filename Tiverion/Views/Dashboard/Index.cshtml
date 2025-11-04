@@ -1,0 +1,249 @@
+@using System.Globalization
+@using System.Linq
+@using Tiverion.Data.Constants
+@using Tiverion.Models.Entities.Enums
+@using Tiverion.Models.Entities.ServiceEntities.Weather
+@using Tiverion.Models.ViewModels
+@model Tiverion.Models.ViewModels.Dashboard.DashboardViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Панель";
+
+    var activeTasks = Model.Tasks.Where(t => t.IsEnabled).ToList();
+    var activeTasksCount = activeTasks.Count;
+
+    var errorEntries = Model.LastDayResults.SelectMany(r => r.Errors ?? Enumerable.Empty<string>()).ToList();
+    var totalErrors = errorEntries.Count;
+    var sampleErrors = errorEntries.Take(3).Select(s => s.Length > 220 ? s.Substring(0, 220) + "…" : s).ToList();
+
+    double callsPerDay = Model.Tasks.Sum(t => t.Interval.TotalSeconds > 0 ? Math.Floor(86400.0 / t.Interval.TotalSeconds) : 0);
+    var callsPerHour = callsPerDay / 24.0;
+
+    var lastTaskResult = Model.LastDayResults.OrderByDescending(r => r.TaskStartTime).FirstOrDefault();
+    var lastTask = lastTaskResult is null ? null : Model.Tasks.FirstOrDefault(t => t.Id == lastTaskResult.TaskId);
+    var lastWeathers = lastTaskResult is null ? null :lastTaskResult.Weather != null ? Model.LastDayWeatherStamps.OrderByDescending(w => w.Timestamp).Take(1).ToList() : null;
+    var lastWeather = lastWeathers is null ? null : lastWeathers.Count > 0 ? lastWeathers[0] : null;
+    
+    string FormatNumber(double v) => v.ToString("N0", CultureInfo.GetCultureInfo("ru-RU"));
+    string FormatSmall(double v) => v.ToString("N1", CultureInfo.GetCultureInfo("ru-RU"));
+}
+
+<section class="dashboard">
+    <partial name="_TopNav" />
+
+    <div class="dashboard-inner">
+        <h1 class="title">Панель</h1>
+        <p class="subtitle">Обзор системы, мониторинг и выполнение действий.</p>
+
+        <partial name="_ShowTempData"/>
+
+        <div class="card-grid">
+            <div class="card">
+                <h3>Активные задачи</h3>
+                <div style="display:flex;align-items:center;gap:12px;flex-grow:1;">
+                    <div style="font-size:28px;font-weight:700;">@activeTasksCount</div>
+                    <div style="color:var(--color-card-subtext)">
+                        <div style="font-weight:600;margin-bottom:6px;">
+                            @if(activeTasksCount>0) { <text>@string.Join(", ", activeTasks.Take(4).Select(t => t.Name))@((activeTasksCount>4) ? "…" : "")</text> }
+                            else { <text>Нет активных</text> }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Ошибки за 24ч</h3>
+                <div style="display:flex;align-items:center;gap:12px;flex-grow:1;">
+                    <div style="font-size:28px;font-weight:700;color:@(totalErrors>0 ? "var(--color-alert-error-text)" : "var(--color-alert-success-text)")">@totalErrors</div>
+                    <div style="color:var(--color-card-subtext)">
+                        <div style="font-weight:600;margin-bottom:6px;">
+                            @if(totalErrors==0) { <text>Проблем нет</text> }
+                            else if(totalErrors==1) { <text>1 запись с ошибкой</text> }
+                            else { <text>@totalErrors записей с ошибками</text> }
+                        </div>
+                        @if(sampleErrors.Any())
+                        {
+                            <div style="max-height:72px;overflow:auto;font-size:12px;background:#fff;padding:6px;border-radius:6px;border:1px solid rgba(198,40,40,0.06);">
+                                @foreach(var e in sampleErrors) { <div style="margin-bottom:6px;">@e</div> }
+                                @if(errorEntries.Count > sampleErrors.Count) { <div>…</div> }
+                            </div>
+                        }
+                        else { <div style="font-size:13px;">Данных нет</div> }
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Текущая нагрузка</h3>
+                <div style="display:flex;align-items:center;gap:12px;flex-grow:1;">
+                    <div style="font-size:28px;font-weight:700;">@FormatNumber(callsPerDay)</div>
+                    <div style="color:var(--color-card-subtext)">
+                        <div style="font-weight:600;margin-bottom:6px;">Оценка вызовов в день</div>
+                        <div style="font-size:13px;">~ @FormatSmall(callsPerHour) задач в час</div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+        <div class="card" style = "margin-bottom: 16px; margin-top: 16px">
+            <h3>Последняя задача</h3>
+
+            @if(lastTaskResult is null)
+            {
+                <div style="font-weight:600">Нет завершенных задач сегодня</div>
+            }
+            else
+            {
+                
+                var diff = DateTime.UtcNow - lastTaskResult.TaskEndTime;
+                string diffText = diff.TotalMinutes < 1 ? "<1 мин" :
+                    diff.TotalMinutes < 60 ? $"{Math.Round(diff.TotalMinutes)} мин" :
+                    diff.TotalHours < 24 ? $"{Math.Round(diff.TotalHours)} ч" :
+                    diff.TotalDays < 7 ? $"{Math.Round(diff.TotalDays)} д" :
+                    diff.TotalDays < 30 ? $"{Math.Round(diff.TotalDays / 7)} нед" :
+                    diff.TotalDays < 365 ? $"{Math.Round(diff.TotalDays / 30)} мес" :
+                    $"{Math.Round(diff.TotalDays / 365)} г";
+
+                <div style="font-weight:700;font-size:16px; margin-bottom:4px;">
+                    @(lastTask is null ? "Панельная задача" : lastTask.Name)
+                </div>
+
+                <div style="display:flex; gap:12px; font-size:13px; color:var(--color-card-subtext);">
+                    <div>Выполнено: @diffText назад</div>
+                </div>
+
+                @if (lastWeather != null)
+                {
+                    <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:stretch;">
+                        <div style="background:var(--color-token-card-bg);padding:8px 12px;border-radius:8px;flex:1 1 200px;display:flex;gap:12px;align-items:center;">
+                            <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;">
+                                <div style="font-size:28px;">
+                                    @{
+                                        var emoji = lastWeather.Condition switch
+                                        {
+                                            Condition.Clear => "☀️",
+                                            Condition.PartlyCloudy => "🌤️",
+                                            Condition.Cloudy => "🌥️",
+                                            Condition.Overcast => "☁️",
+                                            Condition.LightRain => "🌦️",
+                                            Condition.Rain => "🌧️",
+                                            Condition.HeavyRain => "⛈️",
+                                            Condition.LightSnow => "🌨️",
+                                            Condition.Snow => "❄️",
+                                            Condition.Sleet => "🌨️",
+                                            Condition.Thunderstorm => "⛈️",
+                                            Condition.ThunderstormWithRain => "🌩️",
+                                            _ => "🌡️"
+                                        };
+                                        string displayName = lastWeather.Condition.GetDisplayName();
+                                    }
+                                    @emoji
+                                </div>
+                                <div style="margin-top:4px;font-size:12px;color:var(--color-card-subtext);text-align:center;">
+                                    @displayName
+                                </div>
+                            </div>
+
+                            <div style="display:flex;flex-direction:column;flex-grow:1;gap:4px;">
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Температура</span>
+                                    <span>@lastWeather.TemperatureCels°C</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Ощущается</span>
+                                    <span>@lastWeather.FeelsLikeCels°C</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Влажность</span>
+                                    <span>@lastWeather.Humidity%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background:var(--color-token-card-bg);padding:8px 12px;border-radius:8px;flex:1 1 200px;display:flex;gap:12px;align-items:center;">
+                            <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;">
+                                <div style="font-size:28px;">💨</div>
+                                <div style="margin-top:4px;font-size:12px;color:var(--color-card-subtext);text-align:center;">
+                                    Ветер
+                                </div>
+                            </div>
+
+                            <div style="display:flex;flex-direction:column;flex-grow:1;gap:4px;">
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Скорость</span>
+                                    <span>@lastWeather.WindSpeedMpS м/с</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Порывы</span>
+                                    <span>@lastWeather.WindGustMpS м/с</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Напр.</span>
+                                    <span>@lastWeather.WindDirection.GetDisplayName()</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background:var(--color-token-card-bg);padding:8px 12px;border-radius:8px;flex:1 1 200px;display:flex;gap:12px;align-items:center;">
+                            <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;">
+                                <div style="font-size:28px;">🌫️</div>
+                                <div style="margin-top:4px;font-size:12px;color:var(--color-card-subtext);text-align:center;">
+                                    Атмосфера
+                                </div>
+                            </div>
+
+                            <div style="display:flex;flex-direction:column;flex-grow:1;gap:4px;">
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Давление</span>
+                                    <span>@lastWeather.PressureMmHg мм рт. ст.</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Видимость</span>
+                                    <span>@lastWeather.VisibilityKm км</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
+                                    <span>Облачность</span>
+                                    <span>@lastWeather.Cloudiness.GetDisplayName()</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+        
+
+        @{
+            var mapModel = new MapViewModel(
+                Model.LastPosition
+            );
+        }
+
+        <form asp-action="Run" asp-controller="Dashboard" method="post" style="display:flex;flex-direction:column;gap:16px; margin-bottom: 30px">
+            @Html.AntiForgeryToken()
+            <partial name="_InteractiveMap" model="mapModel" />
+            
+            <div style="margin-bottom: 30px">
+            </div>
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:12px;">
+                <button type="submit" class="btn primary full-width-btn">
+                    Выполнить
+                </button>
+            </div>
+        </form>
+
+        @{
+            var tableModel = new TasksTableViewModel(
+                Model.Tasks,
+                true
+            );
+        }
+        @if (Model.Tasks.Count != 0)
+        {
+            <partial name="_TasksManageTable" model = "tableModel"/>
+        }
+    </div>
+
+    
+</section>

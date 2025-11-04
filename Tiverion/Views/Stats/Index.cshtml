@@ -1,0 +1,222 @@
+@using System.Text.Json
+@using System.Linq
+@using Tiverion.Models.Entities.ServiceEntities.Weather
+@model Tiverion.Models.ViewModels.Stats.StatsViewModel
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Статистика погоды";
+
+    string FormatCoord(double? coord) => coord.HasValue
+        ? coord.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+        : "-";
+
+    var weatherList = Model.WeatherStamps?.ToList() ?? new List<CurrentWeather>();
+
+    var buckets = weatherList
+        .Where(w => w != null)
+        .GroupBy(w => w.Timestamp.ToString("yyyy-MM-dd"))
+        .OrderBy(g => g.Key)
+        .Select(g => new { Label = g.Key, Temp = g.Average(x => x.TemperatureCels) })
+        .ToList();
+
+    var chartCfg = new
+    {
+        type = "line",
+        labels = buckets.Select(b => b.Label).ToList(),
+        datasets = new[]
+        {
+            new {
+                label = "Температура (°C)",
+                data = buckets.Select(b => (double)b.Temp).ToList(),
+                fill = false,
+                tension = 0.2,
+                pointRadius = 3
+            }
+        },
+        options = new { responsive = true, maintainAspectRatio = false }
+    };
+}
+
+<section class="tokens">
+    <partial name="_TopNav" />
+    <div class="tokens-inner">
+        <h1 class="title">Статистика погоды</h1>
+        <p class="subtitle">Просматривайте данные погоды и их динамику.</p>
+
+        <div class="actions" style="margin-bottom: 1.5rem;">
+            <a class="btn primary" href="@Url.Action("OpenTask", "Stats")">Создать задачу</a>
+        </div>
+
+        <div class="actions" style="margin-bottom: 1.5rem;">
+            <a class="btn primary" href="@Url.Action("Tasks", "Stats")">Список задач</a>
+        </div>
+
+        <div class="responsive-table"></div>
+
+        <div style="margin-top: 1.5rem;">
+            <h2 class="title">График погоды</h2>
+        </div>
+
+        <div class="chart-block" aria-live="polite">
+            <div id="no-data">Данных для графика нет</div>
+
+            <div class="chart-canvas-wrap">
+                <canvas id="weatherChart"></canvas>
+            </div>
+
+            <div class="chart-controls" role="region" aria-label="Настройки графика" style="display:flex; flex-direction:column; gap:8px; width:100%;">
+                <div style="display:flex; gap:8px; width:100%;">
+                    <label style="flex:1;">
+                        Тип графика
+                        <select id="chartType" class="form-select" style="width:100%;">
+                            <option value="line">Линейный</option>
+                            <option value="bar">Столбчатый</option>
+                        </select>
+                    </label>
+
+                    <label style="flex:1;">
+                        Группировать по
+                        <select id="groupBy" class="form-select" style="width:100%;">
+                            <option value="day">Дата</option>
+                            <option value="hour">Час</option>
+                            <option value="weekday">День недели</option>
+                        </select>
+                    </label>
+
+                    <label style="flex:1;">
+                        Метрика
+                        <select id="metric" class="form-select" style="width:100%;">
+                            <option value="temp">Температура</option>
+                            <option value="feels">Ощущается</option>
+                            <option value="humidity">Влажность</option>
+                            <option value="wind">Скорость ветра</option>
+                            <option value="pressure">Давление</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="actions" style="display:flex; justify-content:flex-end; gap:8px; width:100%;">
+                    <button id="updateChart" class="btn primary">Применить</button>
+                    <button id="resetOptions" class="btn outline" type="button">Сброс</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    window.__chartConfig = @Html.Raw(JsonSerializer.Serialize(chartCfg, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+
+    window.__weatherData = @Html.Raw(JsonSerializer.Serialize(
+        weatherList.Select(w => new {
+            Timestamp = w.Timestamp,
+            Temp = w.TemperatureCels,
+            Feels = w.FeelsLikeCels,
+            Humidity = w.Humidity,
+            Wind = w.WindSpeedMpS,
+            Pressure = w.PressureMmHg
+        }),
+        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
+    ));
+</script>
+
+<script>
+    (function () {
+        const ctx = document.getElementById('weatherChart');
+        const noDataEl = document.getElementById('no-data');
+        const chartType = document.getElementById('chartType');
+        const groupBy = document.getElementById('groupBy');
+        const metric = document.getElementById('metric');
+        const updateBtn = document.getElementById('updateChart');
+        const resetBtn = document.getElementById('resetOptions');
+
+        let chart;
+        const baseCfg = window.__chartConfig || {};
+
+        function buildChart(cfg) {
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, cfg);
+        }
+
+        function groupData() {
+            const data = window.__weatherData || [];
+            const g = new Map();
+            data.forEach(w => {
+                const d = new Date(w.timestamp);
+                let key;
+                if (groupBy.value === 'hour') key = d.getHours().toString().padStart(2, '0') + ':00';
+                else if (groupBy.value === 'weekday') key = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getDay()];
+                else key = d.toISOString().slice(0,10);
+                const cur = g.get(key) || [];
+                cur.push(w);
+                g.set(key, cur);
+            });
+            const labels = Array.from(g.keys());
+            const values = labels.map(l => {
+                const arr = g.get(l);
+                if (!arr || arr.length === 0) return 0;
+                switch (metric.value) {
+                    case 'temp': return +(arr.reduce((a,b)=>a+b.temp,0)/arr.length).toFixed(1);
+                    case 'feels': return +(arr.reduce((a,b)=>a+b.feels,0)/arr.length).toFixed(1);
+                    case 'humidity': return +(arr.reduce((a,b)=>a+b.humidity,0)/arr.length).toFixed(1);
+                    case 'wind': return +(arr.reduce((a,b)=>a+b.wind,0)/arr.length).toFixed(1);
+                    case 'pressure': return +(arr.reduce((a,b)=>a+b.pressure,0)/arr.length).toFixed(1);
+                    default: return 0;
+                }
+            });
+            return { labels, values };
+        }
+
+        function rebuildConfig() {
+            const { labels, values } = groupData();
+            const labelName = {
+                temp: 'Температура (°C)',
+                feels: 'Ощущается (°C)',
+                humidity: 'Влажность (%)',
+                wind: 'Скорость ветра (м/с)',
+                pressure: 'Давление (мм рт. ст.)'
+            }[metric.value] || 'Значение';
+
+            return {
+                type: chartType.value,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: labelName,
+                        data: values,
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 3
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            };
+        }
+
+        updateBtn.addEventListener('click', () => {
+            const cfg = rebuildConfig();
+            if (cfg.data.labels.length > 0) {
+                noDataEl.style.display = 'none';
+                buildChart(cfg);
+            } else {
+                noDataEl.style.display = 'block';
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            chartType.value = 'line';
+            groupBy.value = 'day';
+            metric.value = 'temp';
+            const cfg = rebuildConfig();
+            buildChart(cfg);
+            noDataEl.style.display = cfg.data.labels.length > 0 ? 'none' : 'block';
+        });
+
+        const initCfg = rebuildConfig();
+        buildChart(initCfg);
+        noDataEl.style.display = initCfg.data.labels.length > 0 ? 'none' : 'block';
+    })();
+</script>

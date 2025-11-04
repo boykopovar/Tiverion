@@ -1,0 +1,131 @@
+@model Tiverion.Models.ViewModels.Stats.StatsTasksViewModel
+@using Tiverion.Models.Entities.Enums
+@using System.ComponentModel.DataAnnotations
+@using System.Reflection
+@using System.Globalization
+@using Tiverion.Data.Constants
+@using Tiverion.Models.Entities.ServiceEntities
+@using Tiverion.Models.Platform.Tasks
+@using Tiverion.Models.ViewModels
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Создание задачи";
+
+    StatsTask? target = null;
+
+    double intervalValueInit = 0;
+    double maxDeviationValueInit = 0;
+
+    if (!string.IsNullOrEmpty(Model?.TargetTask))
+    {
+        target = Model.ExistingTasks.First(t => t.Id == Model.TargetTask);
+        
+        intervalValueInit = target.Interval.TotalMinutes;
+        maxDeviationValueInit = target.MaxDeviation.TotalMinutes;
+    }
+}
+
+
+<section class="tokens">
+    <partial name="_TopNav" />
+
+    <div class="tokens-inner">
+        <h1 class="title">Управление задачами статистики</h1>
+        <p class="subtitle">Создавайте новые задачи и управляйте существующими.</p>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-error">@TempData["Error"]</div>
+        }
+        else if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success">@TempData["Success"]</div>
+        }
+
+        <form id="createTaskForm" asp-action="EditTask" method="post" class="card create-task-form" style="margin-bottom: 2rem; display:grid; gap:16px; padding:20px;">
+            @Html.AntiForgeryToken()
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                <input type="hidden" name="Id" value="@(target != null ? target.Id : "")" />
+                <input type="text" name="Name" placeholder="Название задачи" class="form-input" style="flex:1;" required value="@(target != null ? target.Name : "")"/>
+
+                <input type="number"
+                       id="intervalValue"
+                       required
+                       placeholder="Интервал"
+                       class="form-input"
+                       min="1"
+                       style="width:120px;"
+                       value="@(target != null && intervalValueInit > 0 ? intervalValueInit.ToString("G", CultureInfo.InvariantCulture) : "")"/>
+
+                <input type="number"
+                       id="maxDeviationValue"
+                       placeholder="Макс отклонение"
+                       class="form-input"
+                       min="0"
+                       style="width:120px;"
+                       value="@(target != null && maxDeviationValueInit > 0 ? maxDeviationValueInit.ToString("G", CultureInfo.InvariantCulture) : "")"/>
+
+                <input type="hidden" name="MaxDeviationSeconds" id="maxDeviationHidden" value="0"/>
+
+
+                @{
+                    var sb = new System.Text.StringBuilder();
+                    foreach (TimeUnit unit in Enum.GetValues(typeof(TimeUnit)))
+                    {
+                        var member = typeof(TimeUnit).GetMember(unit.ToString()).First();
+                        var displayName = member.GetCustomAttribute<DisplayAttribute>()?.Name ?? unit.ToString();
+                        var intValue = (int)unit;
+                        var selected = unit == TimeUnit.Minutes ? " selected" : "";
+                        sb.Append($"<option value=\"{intValue}\"{selected}>{System.Net.WebUtility.HtmlEncode(displayName)}</option>");
+                    }
+                }
+                <select id="intervalUnit" class="form-select" style="width:120px;">
+                    @Html.Raw(sb.ToString())
+                </select>
+
+                <input type="hidden" name="IntervalSeconds" id="intervalHidden"/>
+            </div>
+
+            <div>
+                <label>Время активации (Utc)</label>
+                <input type="datetime-local" name="ActivationTime" class="form-input" style="max-width:250px;" value="@(target != null ? target.ActivationTime.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture) : "")" />
+            </div>
+
+            @{
+                var mapModel = new MapViewModel(target?.Location);
+            }
+            <partial name="_InteractiveMap" model="mapModel" />
+
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                <button type="submit" class="btn primary full-width-btn">
+                    @(target != null ? "Сохранить изменения" : "Создать задачу")
+                </button>
+            </div>
+        </form>
+        
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        const form = document.getElementById('createTaskForm');
+        const intervalValue = document.getElementById('intervalValue');
+        const intervalUnit = document.getElementById('intervalUnit');
+        const intervalHidden = document.getElementById('intervalHidden');
+        
+
+        form.addEventListener('submit', function(e) {
+            
+            const value = parseFloat(intervalValue.value) || 0;
+            const unitMultiplier = parseInt(intervalUnit.value) || 60;
+            intervalHidden.value = Math.round(value * unitMultiplier);
+
+            const maxDeviationValue = document.getElementById('maxDeviationValue');
+            const maxDeviationHidden = document.getElementById('maxDeviationHidden');
+            maxDeviationHidden.value = Math.round((parseFloat(maxDeviationValue.value) || 0) * unitMultiplier);
+        });
+
+    </script>
+}

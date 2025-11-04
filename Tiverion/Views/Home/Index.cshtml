@@ -1,0 +1,38 @@
+@using Tiverion.Data.Constants
+
+@{
+    ViewData["Title"] = $"Главная";
+    Layout = "_Layout";
+}
+<section class="hero">
+
+    <partial name="_TopNav" />
+
+    <div class="hero-inner">
+        <div class="hero-left">
+            <h1 class="title">
+                @PlatformSettings.PlatformName
+            </h1>
+            <p class="subtitle">Платформа для cтабилизации мобильности и мониторинга.</p>
+            <div class="cta-row">
+                <a class="btn primary" asp-controller="Dashboard" asp-action="Index">Открыть панель</a>
+            </div>
+        </div>
+        <div class="hero-right">
+
+                <div class="card">
+                    <h3>Мониторинг</h3>
+                    <p>Отслеживание статусов и показателей в реальном времени.</p>
+                </div>
+                <div class="card">
+                    <h3>Аналитика</h3>
+                    <p>Исторические отчёты и графики использования.</p>
+                </div>
+                <div class="card">
+                    <h3>Настройки</h3>
+                    <p>Права доступа и конфигурации.</p>
+                </div>
+
+        </div>
+    </div>
+</section>

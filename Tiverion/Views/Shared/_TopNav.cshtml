@@ -1,0 +1,54 @@
+@using Tiverion.Data.Constants
+@{
+    var currentPath = Context.Request.Path.Value ?? "/";
+    var isAuth = User?.Identity?.IsAuthenticated ?? false;
+
+    var navLinks = new Dictionary<string, string>
+    {
+        { "Панель", PlatformSettings.Urls.DashboardPage },
+        { "Вход", PlatformSettings.Urls.LoginPage },
+        { "Регистрация", PlatformSettings.Urls.RegisterPage },
+        { "Статистика", PlatformSettings.Urls.StatsPage },
+        { "Настройки", PlatformSettings.Urls.SettingsPage }
+    };
+
+    bool IsPublic(string url) => PlatformSettings.PublicPages.Contains(url, StringComparer.OrdinalIgnoreCase);
+}
+<nav class="topnav mb-3">
+    <div class="brand">
+        <a asp-controller="Home" asp-action="Index" class="d-flex align-items-center" style="gap:8px;">
+            <img src="~/res/no_bg/tiverion.png"
+                 alt="@PlatformSettings.PlatformShortName Logo"
+            />
+            <span>@PlatformSettings.PlatformShortName</span>
+        </a>
+
+    </div>
+    <ul class="navlinks list-unstyled d-flex gap-3 m-0 p-0">
+        @foreach (var kv in navLinks)
+        {
+            var title = kv.Key;
+            var url = kv.Value;
+            var isActive = string.Equals(currentPath, url, StringComparison.OrdinalIgnoreCase);
+
+            if ((url == PlatformSettings.Urls.LoginPage || url == PlatformSettings.Urls.RegisterPage) 
+                && isAuth)
+            {
+                continue;
+            }
+
+            if (!IsPublic(url) && !isAuth)
+            {
+                <li>
+                    <a class="disabled-link" aria-disabled="true" tabindex="-1" title="Требуется вход">@title</a>
+                </li>
+            }
+            else
+            {
+                <li>
+                    <a href="@url" class="@(isActive ? "active" : "")">@title</a>
+                </li>
+            }
+        }
+    </ul>
+</nav>

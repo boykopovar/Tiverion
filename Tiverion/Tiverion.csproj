@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.9" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.9" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="Views\Tokens\Index.cshtml" />
+      <_ContentIncludedByDefault Remove="wwwroot\res\services\eleven.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\res\services\whoosh.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\res\services\yandexgo.png" />
+    </ItemGroup>
+
+</Project>

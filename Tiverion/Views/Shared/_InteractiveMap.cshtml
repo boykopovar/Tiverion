@@ -1,0 +1,85 @@
+@using System.Globalization
+@using Tiverion.Data.Constants
+@model Tiverion.Models.ViewModels.MapViewModel
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<div class="map-container-wrapper" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px">
+    <div id="map" style="height:400px; border-radius:12px; overflow:hidden;"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+@{
+var centerPoint = Model.Location ?? PlatformSettings.DefaultPosition;
+string centerLatVal = centerPoint.Lat.ToString("F6", CultureInfo.InvariantCulture);
+string centerLonVal = centerPoint.Lon.ToString("F6", CultureInfo.InvariantCulture);
+string initLatInput = Model.Location != null ? Model.Location.Lat.ToString("F6", CultureInfo.InvariantCulture) : "";
+string initLonInput = Model.Location != null ? Model.Location.Lon.ToString("F6", CultureInfo.InvariantCulture) : "";
+}
+
+<div class="card-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap:12px; align-items:stretch;">
+    <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+        <label>Позиция</label>
+        <div style="display:flex; gap:8px; min-width:0;">
+            <input id="LocationLat" name="LocationLat" type="number" step="any" required placeholder="Lat"
+                   class="form-input"
+                   style="flex:1; min-width:0; width:100%; box-sizing:border-box;"
+                   value="@initLatInput" />
+            <input id="LocationLon" name="LocationLon" type="number" step="any" required placeholder="Lon"
+                   class="form-input"
+                   style="flex:1; min-width:0; width:100%; box-sizing:border-box;"
+                   value="@initLonInput" />
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const map = L.map('map', { attributionControl: false }).setView([@centerLatVal, @centerLonVal], 12);
+
+        L.tileLayer('http://mt0.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            attribution: '',
+            maxZoom: 19,
+            subdomains: ['mt0','mt1','mt2','mt3']
+        }).addTo(map);
+
+        let marker = null;
+
+        function setMarker(lat, lon, panTo = true) {
+            if (!isFinite(Number(lat)) || !isFinite(Number(lon))) return;
+            const latNum = Number(lat);
+            const lonNum = Number(lon);
+            if (marker) {
+                marker.setLatLng([latNum, lonNum]);
+            } else {
+                marker = L.marker([latNum, lonNum], { draggable: true }).addTo(map);
+                marker.on('dragend', function (e) {
+                    const p = e.target.getLatLng();
+                    updateInputsFromLatLng(p.lat, p.lng);
+                });
+            }
+            if (panTo) map.panTo([latNum, lonNum]);
+            updateInputsFromLatLng(latNum, lonNum);
+        }
+
+        function updateInputsFromLatLng(lat, lon) {
+            document.getElementById('LocationLat').value = lat.toFixed(6);
+            document.getElementById('LocationLon').value = lon.toFixed(6);
+        }
+
+        map.on('click', function (e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+            setMarker(lat, lon, false);
+            updateInputsFromLatLng(lat, lon);
+        });
+
+        const initLat = document.getElementById('LocationLat').value;
+        const initLon = document.getElementById('LocationLon').value;
+
+        if (initLat && initLon) {
+            setMarker(initLat, initLon, false);
+            map.setView([Number(initLat), Number(initLon)], 12);
+        }
+    })();
+</script>

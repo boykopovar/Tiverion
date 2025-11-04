@@ -1,0 +1,29 @@
+@using Tiverion.Models.ViewModels
+@model Tiverion.Models.ViewModels.Stats.StatsTasksViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Задачи";
+
+   
+}
+
+<section class="tokens">
+    <partial name="_TopNav" />
+
+    <div class="tokens-inner">
+        <h1 class="title">Управление задачами сбора статистики</h1>
+        <p class="subtitle">Просматривайте и управляйте созданными задачами.</p>
+
+        <div class="actions" style="margin-bottom: 1.5rem;">
+            <a class="btn primary" href="@Url.Action("OpenTask", "Stats")">Создать задачу</a>
+        </div>
+        
+        @{
+            var tableModel = new TasksTableViewModel(
+                Model.ExistingTasks,
+                false
+            );
+        }
+        <partial name="_TasksManageTable" model = "tableModel"/>
+    </div>
+</section>
