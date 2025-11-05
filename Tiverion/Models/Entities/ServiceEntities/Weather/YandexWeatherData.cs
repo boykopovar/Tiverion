@@ -54,7 +54,7 @@ namespace Tiverion.Models.Entities.ServiceEntities.Weather
         public int VisibilityKm { get; private set; }
         
         [JsonPropertyName("kpIndex")]
-        public int KpIndex { get; set; }
+        public double KpIndex { get; private set; }
 
         [JsonPropertyName("pollution")]
         public PollutionInfo Pollution { get; private set; }
@@ -63,6 +63,8 @@ namespace Tiverion.Models.Entities.ServiceEntities.Weather
         
         public double Lat { get; set; }
         public double Lon { get; set; }
+
+        public string TaskId { get; set; } = "";
 
         private CurrentWeather() { }
 

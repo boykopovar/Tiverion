@@ -62,6 +62,13 @@ public class YaWeatherClient : IWeatherClient<WeatherContent, CurrentWeather>
     {
         return await GetNowWeatherAsync((point.Lat, point.Lon));
     }
+    
+    public static async Task<CurrentWeather> GetNowWeatherAsync(MapPoint point, string taskId)
+    {
+        var weather =  await GetNowWeatherAsync((point.Lat, point.Lon));
+        weather.TaskId = taskId;
+        return weather;
+    }
     public static async Task<CurrentWeather> GetNowWeatherAsync((double Lat, double Lon) point)
     {
         return (await GetWeatherAsync(point)).Now;

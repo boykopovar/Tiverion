@@ -20,9 +20,11 @@
     var callsPerHour = callsPerDay / 24.0;
 
     var lastTaskResult = Model.LastDayResults.OrderByDescending(r => r.TaskStartTime).FirstOrDefault();
+    var lastWeather = lastTaskResult is null ? null : Model.LastDayWeatherStamps
+        .OrderByDescending(w => w.Timestamp)
+        .FirstOrDefault(w => w.TaskId == lastTaskResult.TaskId);
     var lastTask = lastTaskResult is null ? null : Model.Tasks.FirstOrDefault(t => t.Id == lastTaskResult.TaskId);
-    var lastWeathers = lastTaskResult is null ? null :lastTaskResult.Weather != null ? Model.LastDayWeatherStamps.OrderByDescending(w => w.Timestamp).Take(1).ToList() : null;
-    var lastWeather = lastWeathers is null ? null : lastWeathers.Count > 0 ? lastWeathers[0] : null;
+    
     
     string FormatNumber(double v) => v.ToString("N0", CultureInfo.GetCultureInfo("ru-RU"));
     string FormatSmall(double v) => v.ToString("N1", CultureInfo.GetCultureInfo("ru-RU"));
@@ -200,7 +202,7 @@
                                 </div>
                                 <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
                                     <span>Видимость</span>
-                                    <span>@lastWeather.VisibilityKm км</span>
+                                    <span>@lastWeather.VisibilityKm м</span>
                                 </div>
                                 <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;">
                                     <span>Облачность</span>

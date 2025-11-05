@@ -60,7 +60,8 @@ public class StatsTaskExecutor : ITaskExecutor<ITask, StatsTaskResult>
         try
         {
             return await YaWeatherClient.GetNowWeatherAsync(
-                task.Location
+                task.Location,
+                task.Id
             );
         }
         catch (Exception ex){_exceptions.Add(ex.ToString());}
