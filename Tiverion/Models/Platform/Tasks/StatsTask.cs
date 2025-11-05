@@ -57,6 +57,7 @@ public class StatsTask : IPeriodicTask, IValidatableTask
         ActivationTime = statsTaskDto.ActivationTime;
         Name = statsTaskDto.Name;
         IsEnabled = statsTaskDto.IsEnabled;
+        Location = new MapPoint(statsTaskDto.LocationLat, statsTaskDto.LocationLon);
         
         Interval = TimeSpan.FromSeconds(statsTaskDto.IntervalSeconds);
         MaxDeviation = TimeSpan.FromSeconds(statsTaskDto.MaxDeviationSeconds);

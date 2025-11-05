@@ -46,6 +46,7 @@ namespace Tiverion.Models.Clients.YandexWeather
                       pressureMmHg: pressure(unit: $pressureUnit)
                       pressurePa: pressure(unit: PASCAL)
                       visibilityKm: visibility
+                      kpIndex(gScale: false)
                       pollution {{ aqi dominant pm2p5 pm10 no2 so2 o3 co }}
                     }}
                     forecast {{

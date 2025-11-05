@@ -52,6 +52,9 @@ namespace Tiverion.Models.Entities.ServiceEntities.Weather
 
         [JsonPropertyName("visibilityKm")]
         public int VisibilityKm { get; private set; }
+        
+        [JsonPropertyName("kpIndex")]
+        public int KpIndex { get; set; }
 
         [JsonPropertyName("pollution")]
         public PollutionInfo Pollution { get; private set; }
