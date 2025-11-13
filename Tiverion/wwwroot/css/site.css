@@ -56,6 +56,7 @@
   --color-auth-panel-bg: #ffffff;
   --color-role-avatar-bg: #f1f8f3;
   --color-scrollbar-thumb: rgba(11,59,50,0.12);
+  --color-map-border: solid black;
 }
 
 
@@ -130,6 +131,10 @@ html {
   cursor: default;
 }
 
+.hero-right .card {
+  margin-bottom: 6px;
+}
+
 .hero-inner {
   display: grid;
   grid-template-columns: 1fr 420px;
@@ -166,25 +171,35 @@ html {
   font-weight: 600;
   text-decoration: none;
   border: 1px solid transparent;
+  
+  min-height: 45px;
 }
 
 .btn.primary {
   background: linear-gradient(90deg,var(--color-btn-primary-bg-gradient-start),var(--color-btn-primary-bg-gradient-end));
   color: var(--color-btn-primary-text);
+  min-width: 150px;
 }
 
 .btn.outline {
   background: transparent;
-  border-color: var(--color-btn-outline-border);
   color: var(--color-btn-outline-text);
+  border-color: var(--color-btn-outline-border);
+}
+
+.btn.outline.neutral{
+  color: var(--color-btn-outline-text);
+  border-color: var(--color-btn-outline-text);
 }
 
 .btn.outline.positive {
   color: var(--color-alert-success-text);
+  border-color: var(--color-alert-success-text);
 }
 
 .btn.outline.negative {
   color: var(--color-alert-error-text);
+  border-color: var(--color-alert-error-text);
 }
 
 .card-grid {
@@ -417,7 +432,6 @@ input[type="checkbox"]:disabled::after {
 .token-cards {
   display: flex;
   gap: 16px;
-  justify-content: space-between;
   flex-wrap: wrap;
   margin-bottom: 20px;
 }
@@ -425,7 +439,6 @@ input[type="checkbox"]:disabled::after {
 .token-card {
   flex: 1;
   min-width: 150px;
-  max-width: 300px;
   background-color: var(--color-token-card-bg);
   border-radius: 12px;
   padding: 16px;
@@ -718,21 +731,24 @@ input[type="checkbox"]:disabled::after {
   .filter-row { width: 100%; display: flex; justify-content: flex-start; }
   .filter-label { font-size: 13px; }
   .form-row { flex-direction: column; align-items: stretch; gap: 10px; }
-  .form-input, .form-select, .form-input[type="date"] {  box-sizing: border-box; } /* was width: 100%;*/
-  .btn { padding: 10px 12px; border-radius: 10px; font-size: 15px; }
+  .form-input, .form-select, .form-input[type="date"] {  width: 100% !important; box-sizing: border-box; } /* was width: 100%;*/
+
   .btn.primary, .btn.outline { width: 100%; box-sizing: border-box; }
   .token-cards { flex-direction: column; gap: 12px; }
   .token-card { max-width: 100%; display: flex; gap: 12px; align-items: center; padding: 12px; }
-  .tokens-table { padding: 0; border-radius: 10px; box-shadow: none; }
-  .tokens-table > .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .tokens-table table { display: block; width: 100%; min-width: 680px; border-collapse: collapse; }
-  .tokens-table thead, .tokens-table tbody, .tokens-table tr { display: table; width: 100%; table-layout: fixed; }
-  .tokens-table thead { width: calc(100% - 17px); }
-  .tokens-table th, .tokens-table td { padding: 10px 12px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tokens-table table th:first-child, .tokens-table table td:first-child { min-width: 120px; }
-  .tokens-table table th:nth-child(2), .tokens-table table td:nth-child(2) { min-width: 160px; }
-  .tokens-table table th:nth-child(6), .tokens-table table td:nth-child(6) { min-width: 120px; }
-  .tokens-table .empty-table { padding: 14px; font-size: 14px; }
+
+  .responsive-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+  }
+
+  .responsive-table table {
+    min-width: 720px;
+    width: 100%;
+    border-collapse: collapse;
+  }
+
   .users-grid { grid-template-columns: 1fr; gap: 12px; }
   .role-avatar { width: 48px; height: 48px; font-size: 20px; }
   .auth-panel { margin: 24px 12px; padding: 18px; }
@@ -742,15 +758,6 @@ input[type="checkbox"]:disabled::after {
   .token-count, .token-type { font-size: 13px; }
   .token-logo { font-size: 30px; }
   .inline-form button { padding: 8px 10px; font-size: 13px; }
-  table { border-spacing: 0; }
-  .no-tokens-row td, .empty-table { text-align: center; }
-  @supports (-webkit-overflow-scrolling: touch) { .tokens-table > .table-wrapper { -webkit-overflow-scrolling: touch; } }
-  .responsive-table > table { display: block; width: 100%; min-width: 680px; }
-  .responsive-table thead, .responsive-table tbody, .responsive-table tr { display: table; width: 100%; table-layout: fixed; }
-  .responsive-table th, .responsive-table td { padding: 10px 12px; font-size: 13px; }
-  .responsive-table th:first-child, .responsive-table td:first-child { min-width: 120px; }
-  .responsive-table th:nth-child(2), .responsive-table td:nth-child(2) { min-width: 160px; }
-  .responsive-table th:nth-child(6), .responsive-table td:nth-child(6) { min-width: 120px; }
 
   .chart-controls { flex-direction:row; align-items:center; flex-wrap:wrap; }
   .chart-controls label { flex: 1 1 200px; }

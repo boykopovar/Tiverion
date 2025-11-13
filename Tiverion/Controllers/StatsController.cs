@@ -14,11 +14,13 @@ namespace Tiverion.Controllers;
 public class StatsController : Controller
 {
     private readonly TiverionDbContext _db;
+    private readonly TiverionCacheContext _cache;
     private readonly TaskEventHub<StatsTask> _eventHub;
 
-    public StatsController(TiverionDbContext db, TaskEventHub<StatsTask> eventHub)
+    public StatsController(TiverionDbContext db, TiverionCacheContext cache, TaskEventHub<StatsTask> eventHub)
     {
         _db = db;
+        _cache = cache;
         _eventHub = eventHub;
     }
     
@@ -38,17 +40,17 @@ public class StatsController : Controller
         var actionAndUser = await ConfirmUser(User);
         if (actionAndUser.action is not null) return actionAndUser.action;
 
-        var model = new StatsTasksViewModel(
-            await _db.StatsTasks.ToListAsync(),
-            actionAndUser.user!.LastPosition
-        );
+        // var model = new StatsTasksViewModel(
+        //     await _db.StatsTasks.ToListAsync(),
+        //     actionAndUser.user!.LastPosition
+        // );
 
-        return View("Tasks", model);
-        // var model = new StatsViewModel
-        // {
-        //     Scooters = _db.Scooters
-        // };
-        // return View(model);
+        // return View("Tasks", model);
+        var model = new StatsViewModel
+        {
+            WeatherStamps = _cache.WeatherStamps
+        };
+        return View(model);
     }
     
     public async Task<IActionResult> Tasks()

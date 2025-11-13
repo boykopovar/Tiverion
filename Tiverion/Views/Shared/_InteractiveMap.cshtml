@@ -3,8 +3,12 @@
 @model Tiverion.Models.ViewModels.MapViewModel
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<div class="map-container-wrapper" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px">
-    <div id="map" style="height:400px; border-radius:12px; overflow:hidden;"></div>
+
+<div class="map-container-wrapper" style="display:flex; flex-direction:column; gap:4px; margin-bottom: 6px">
+    <div id="areaInfo" style="font-weight:600;">Площадь: -</div>
+    <div style="border: 1px var(--color-map-border); border-radius:10px; display:inline-block;">
+        <div id="map" style="height:400px; border-radius:10px; overflow:hidden;"></div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>

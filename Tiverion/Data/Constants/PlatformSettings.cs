@@ -18,6 +18,7 @@ public static class PlatformSettings
         public const string RegisterPage = "/Account/Register";
         public const string DashboardPage = "/Dashboard/Index";
         public const string StatsPage = "/Stats/Index";
+        public const string TasksPage = "/Stats/Tasks";
         public const string SettingsPage = "/Settings/Index";
     }
     
