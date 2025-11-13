@@ -45,7 +45,7 @@ var tableModel = new TasksTableViewModel(
             <td>@task.Name</td>
             <td>@(task.Interval.TotalMinutes) мин</td>
             <td>
-                <span>@task.Location.ToString()</span>
+                <span>@($"{task.Location.Lat}, {task.Location.Lon}") </span>
             </td>
             <td>
                 @{
@@ -54,14 +54,14 @@ var tableModel = new TasksTableViewModel(
                 }
                 @time
             </td>
-            <td style="display:flex; gap:8px; flex-wrap:wrap;">
-                <a class="btn outline" href="@Url.Action("OpenTask", "Stats")?taskId=@task.Id">Загрузить</a>
+            <td style="display:flex; gap:8px;">
+                <a class="btn outline neutral" href="@Url.Action("OpenTask", "Stats")?taskId=@task.Id">Открыть</a>
                 @if (Model.NeedLaunchBtn)
                 {
                 <form asp-controller="Dashboard" asp-action="RunStatsTask" method="post" class="inline-form">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="taskId" value="@task.Id"/>
-                    <button type="submit" class="btn outline" style="color:var(--color-navlink-active-text)">Выполнить</button>
+                    <button type="submit" class="btn outline neutral">Выполнить</button>
                 </form>
                 }
                 else
@@ -69,7 +69,7 @@ var tableModel = new TasksTableViewModel(
                 <form asp-action="Delete" method="post" class="inline-form" onsubmit="return confirm('Вы точно хотите удалить эту задачу?');">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="taskId" value="@task.Id"/>
-                    <button type="submit" class="btn outline" style="color:#c62828">Удалить</button>
+                    <button type="submit" class="btn outline negative">Удалить</button>
                 </form>
                 }
                 <form asp-action="Enable" method="post" class="inline-form">
