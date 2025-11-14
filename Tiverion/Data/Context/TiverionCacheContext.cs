@@ -15,15 +15,15 @@ public class TiverionCacheContext : DbContext
         Database.EnsureCreated();
     }
 
-    public DbSet<CurrentWeather> WeatherStamps { get; set; }
+    public DbSet<WeatherStamp> WeatherStamps { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.Entity<CurrentWeather>(entity =>
+        modelBuilder.Entity<WeatherStamp>(entity =>
         {
-            entity.HasKey(cw => new {cw.Timestamp, cw.Lat, cw.Lon});
             entity.OwnsOne(cw => cw.Pollution);
+            entity.HasKey(cw => new {cw.Timestamp, cw.Lat, cw.Lon});
         });
     }
 }

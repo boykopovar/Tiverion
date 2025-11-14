@@ -1,0 +1,24 @@
+namespace Tiverion.Models.ViewModels.Stats;
+
+public class AnalysisRangeDto
+{
+    public WeatherConditionRangeDto? Input { get; set; }
+    public double? ResultPercent { get; set; }
+}
+
+
+public class WeatherConditionRangeDto
+{
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
+    public Dictionary<string, NumericRange>? NumericRanges { get; set; } = new();
+    public Dictionary<string, NumericRange>? EnumRanges { get; set; } = new();
+}
+
+public class NumericRange
+{
+    public double? From { get; set; }
+    public double? To { get; set; }
+}
+
+

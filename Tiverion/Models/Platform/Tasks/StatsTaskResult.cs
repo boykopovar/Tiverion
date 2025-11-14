@@ -50,7 +50,7 @@ public class StatsTaskResult : ITaskResult
     
     
     [NotMapped]
-    public CurrentWeather? Weather { get; private set; }
+    public WeatherStamp? Weather { get; private set; }
     
 
     public StatsTaskResult(
@@ -58,7 +58,7 @@ public class StatsTaskResult : ITaskResult
         DateTime taskStartTime,
         StatsTaskStatus status,
         List<string> errors,
-        CurrentWeather? weather
+        WeatherStamp? weather
         )
     {
         TaskId = taskId;

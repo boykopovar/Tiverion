@@ -55,14 +55,12 @@ public class StatsTaskExecutor : ITaskExecutor<ITask, StatsTaskResult>
         );
     }
 
-    private async Task<CurrentWeather?> _GetWeatherAsync(ITask task)
+    private async Task<WeatherStamp?> _GetWeatherAsync(ITask task)
     {
         try
         {
-            return await YaWeatherClient.GetNowWeatherAsync(
-                task.Location,
-                task.Id
-            );
+            var weather = await YaWeatherClient.GetNowWeatherAsync(task.Location);
+            return new(weather, task.Location, task.Id);
         }
         catch (Exception ex){_exceptions.Add(ex.ToString());}
 

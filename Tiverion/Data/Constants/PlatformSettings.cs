@@ -1,5 +1,8 @@
+using System.ComponentModel;
 using System.Globalization;
 using Tiverion.Models.Entities.ServiceEntities;
+using System.Reflection;
+using Tiverion.Models.Entities.ServiceEntities.Weather;
 
 namespace Tiverion.Data.Constants;
 
@@ -29,5 +32,18 @@ public static class PlatformSettings
         Urls.LoginPage,
         Urls.RegisterPage
     };
+    
+    public static readonly IReadOnlyList<(string Name, Func<CurrentWeather, object?> Getter)> CurrentWeatherAccessors =
+        typeof(CurrentWeather)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.PropertyType.IsValueType || p.PropertyType == typeof(string))
+            .Select(p =>
+            {
+                var displayNameAttr = p.GetCustomAttribute<DisplayNameAttribute>();
+                var name = displayNameAttr != null ? displayNameAttr.DisplayName : p.Name;
+                Func<CurrentWeather, object?> getter = (cw) => p.GetValue(cw);
+                return (name, getter);
+            })
+            .ToList();
     
 }
