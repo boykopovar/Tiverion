@@ -1,41 +1,71 @@
 @using System.Text.Json
 @using System.Linq
+@using System.Reflection
+@using System.ComponentModel
 @using Tiverion.Models.Entities.ServiceEntities.Weather
 @model Tiverion.Models.ViewModels.Stats.StatsViewModel
 
 @{
-    Layout = "_Layout";
-    ViewData["Title"] = "Статистика погоды";
+Layout = "_Layout";
+ViewData["Title"] = "Статистика погоды";
 
-    string FormatCoord(double? coord) => coord.HasValue
-        ? coord.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
-        : "-";
+var weatherList = Model.WeatherStamps?.ToList() ?? new List<WeatherStamp>();
 
-    var weatherList = Model.WeatherStamps?.ToList() ?? new List<CurrentWeather>();
+var templateProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+    .Where(p => p.PropertyType.IsValueType || p.PropertyType == typeof(string))
+    .ToArray();
 
-    var buckets = weatherList
-        .Where(w => w != null)
-        .GroupBy(w => w.Timestamp.ToString("yyyy-MM-dd"))
-        .OrderBy(g => g.Key)
-        .Select(g => new { Label = g.Key, Temp = g.Average(x => x.TemperatureCels) })
-        .ToList();
+var templateNames = templateProps.Select(p => p.Name).ToHashSet();
+var displayMap = templateProps.ToDictionary(p => p.Name, p => p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name);
+var metricOptions = templateProps.Select(p => new {
+    key = p.Name,
+    display = displayMap[p.Name],
+    type = p.PropertyType.IsEnum ? "enum" : (p.PropertyType == typeof(string) ? "string" : "numeric")
+}).ToList();
 
-    var chartCfg = new
+var timestampProp = typeof(WeatherStamp).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+    .FirstOrDefault(p => p.PropertyType == typeof(DateTime) || p.PropertyType == typeof(DateTimeOffset));
+var timestampKey = timestampProp?.Name ?? "";
+
+var dynamicWeatherData = weatherList.Select(w =>
+{
+    var dict = new Dictionary<string, object?>();
+    foreach (var name in templateNames)
     {
-        type = "line",
-        labels = buckets.Select(b => b.Label).ToList(),
-        datasets = new[]
-        {
-            new {
-                label = "Температура (°C)",
-                data = buckets.Select(b => (double)b.Temp).ToList(),
-                fill = false,
-                tension = 0.2,
-                pointRadius = 3
-            }
-        },
-        options = new { responsive = true, maintainAspectRatio = false }
-    };
+        var pi = w.GetType().GetProperty(name);
+        if (pi == null) continue;
+        var val = pi.GetValue(w);
+        if (val != null && val.GetType().IsEnum) dict[name] = val.ToString();
+        else dict[name] = val;
+    }
+    if (!string.IsNullOrEmpty(timestampKey))
+    {
+        var tpi = w.GetType().GetProperty(timestampKey);
+        var tval = tpi?.GetValue(w);
+        dict[timestampKey] = tval is DateTime dt ? dt.ToString("o") : tval?.ToString();
+    }
+    return dict;
+}).ToList();
+
+var chartCfg = new {
+    type = "line",
+    labels = dynamicWeatherData.Select(d => d.ContainsKey(timestampKey) ? d[timestampKey]?.ToString() : null).ToList(),
+    datasets = new[] {
+        new {
+            label = metricOptions.FirstOrDefault()?.display,
+            data = dynamicWeatherData.Select(d => {
+                var firstMetric = metricOptions.FirstOrDefault()?.key;
+                if (firstMetric == null) return 0d;
+                var v = d.ContainsKey(firstMetric) ? d[firstMetric] : 0;
+                try { return Convert.ToDouble(v ?? 0); } catch { return 0d; }
+            }).ToList(),
+            fill = false,
+            tension = 0.2,
+            pointRadius = 3
+        }
+    },
+    options = new { responsive = true, maintainAspectRatio = false }
+};
 }
 
 <section class="tokens">
@@ -43,24 +73,18 @@
     <div class="tokens-inner">
         <h1 class="title">Статистика погоды</h1>
         <p class="subtitle">Просматривайте данные погоды и их динамику.</p>
-
         <div class="actions" style="margin-bottom: 1.5rem;">
             <a class="btn primary" href="@Url.Action("Tasks", "Stats")">Список задач</a>
+            <a class="btn primary" href="@Url.Action("Analysis", "Stats")">Анализ</a>
         </div>
-
-        <div class="responsive-table"></div>
-
         <div style="margin-top: 1.5rem;">
             <h2 class="title">График погоды</h2>
         </div>
-
         <div class="chart-block" aria-live="polite">
             <div id="no-data">Данных для графика нет</div>
-
             <div class="chart-canvas-wrap">
                 <canvas id="weatherChart"></canvas>
             </div>
-
             <div class="chart-controls" role="region" aria-label="Настройки графика" style="display:flex; flex-direction:column; gap:8px; width:100%;">
                 <div style="display:flex; gap:8px; width:100%;">
                     <label style="flex:1;">
@@ -68,9 +92,9 @@
                         <select id="chartType" class="form-select" style="width:100%;">
                             <option value="line">Линейный</option>
                             <option value="bar">Столбчатый</option>
+                            <option value="pie">Круговой</option>
                         </select>
                     </label>
-
                     <label style="flex:1;">
                         Группировать по
                         <select id="groupBy" class="form-select" style="width:100%;">
@@ -79,19 +103,16 @@
                             <option value="weekday">День недели</option>
                         </select>
                     </label>
-
                     <label style="flex:1;">
                         Метрика
                         <select id="metric" class="form-select" style="width:100%;">
-                            <option value="temp">Температура</option>
-                            <option value="feels">Ощущается</option>
-                            <option value="humidity">Влажность</option>
-                            <option value="wind">Скорость ветра</option>
-                            <option value="pressure">Давление</option>
+                            @foreach (var m in metricOptions)
+                            {
+                                <option value="@m.key">@m.display</option>
+                            }
                         </select>
                     </label>
                 </div>
-
                 <div class="actions" style="display:flex; justify-content:flex-end; gap:8px; width:100%;">
                     <button id="updateChart" class="btn primary">Применить</button>
                     <button id="resetOptions" class="btn outline" type="button">Сброс</button>
@@ -102,117 +123,157 @@
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
-    window.__chartConfig = @Html.Raw(JsonSerializer.Serialize(chartCfg, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+window.__chartConfig = @Html.Raw(JsonSerializer.Serialize(chartCfg, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+window.__weatherData = @Html.Raw(JsonSerializer.Serialize(dynamicWeatherData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+window.__metricOptions = @Html.Raw(JsonSerializer.Serialize(metricOptions, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+window.__displayMap = @Html.Raw(JsonSerializer.Serialize(displayMap, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+window.__timestampKey = @Html.Raw(JsonSerializer.Serialize(timestampKey));
 
-    window.__weatherData = @Html.Raw(JsonSerializer.Serialize(
-        weatherList.Select(w => new {
-            Timestamp = w.Timestamp,
-            Temp = w.TemperatureCels,
-            Feels = w.FeelsLikeCels,
-            Humidity = w.Humidity,
-            Wind = w.WindSpeedMpS,
-            Pressure = w.PressureMmHg
-        }),
-        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
-    ));
-</script>
+(function () {
+    const palette = [
+        '#3366cc','#dc3912','#ff9900','#109618','#990099',
+        '#0099c6','#dd4477','#66aa00','#b82e2e','#316395'
+    ];
+    const ctx = document.getElementById('weatherChart');
+    const noDataEl = document.getElementById('no-data');
+    const chartTypeEl = document.getElementById('chartType');
+    const groupBy = document.getElementById('groupBy');
+    const metric = document.getElementById('metric');
+    const updateBtn = document.getElementById('updateChart');
+    const resetBtn = document.getElementById('resetOptions');
+    let chart;
 
-<script>
-    (function () {
-        const ctx = document.getElementById('weatherChart');
-        const noDataEl = document.getElementById('no-data');
-        const chartType = document.getElementById('chartType');
-        const groupBy = document.getElementById('groupBy');
-        const metric = document.getElementById('metric');
-        const updateBtn = document.getElementById('updateChart');
-        const resetBtn = document.getElementById('resetOptions');
+    function buildChart(cfg) {
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, cfg);
+    }
 
-        let chart;
-        const baseCfg = window.__chartConfig || {};
+    function parseDate(v) {
+        if (!v) return null;
+        const d = new Date(v);
+        if (isNaN(d)) return null;
+        return d;
+    }
 
-        function buildChart(cfg) {
-            if (chart) chart.destroy();
-            chart = new Chart(ctx, cfg);
-        }
+    function groupDataForMetric(metricKey) {
+        const data = window.__weatherData || [];
+        const tsKey = window.__timestampKey || null;
+        if (!tsKey) return { labels: [], values: [] };
+        const g = new Map();
+        data.forEach(w => {
+            const dt = parseDate(w[tsKey]);
+            if (!dt) return;
+            let key;
+            if (groupBy.value === 'hour') key = String(dt.getHours()).padStart(2,'0') + ':00';
+            else if (groupBy.value === 'weekday') key = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][dt.getDay()];
+            else key = dt.toISOString().slice(0,10);
+            const arr = g.get(key) || [];
+            arr.push(w);
+            g.set(key, arr);
+        });
+        const labels = Array.from(g.keys());
+        const values = labels.map(l => {
+            const arr = g.get(l);
+            if (!arr || arr.length === 0) return 0;
+            let sum = 0, cnt = 0;
+            arr.forEach(item => {
+                const v = item[metricKey];
+                const n = (v === null || v === undefined) ? NaN : Number(v);
+                if (!isNaN(n)) { sum += n; cnt++; }
+            });
+            return cnt === 0 ? 0 : +(sum / cnt).toFixed(2);
+        });
+        return { labels, values };
+    }
 
-        function groupData() {
-            const data = window.__weatherData || [];
-            const g = new Map();
+    function buildPieForMetric(metricKey, metricType) {
+        const data = window.__weatherData || [];
+        if (metricType === 'enum' || metricType === 'string') {
+            const counts = new Map();
             data.forEach(w => {
-                const d = new Date(w.timestamp);
-                let key;
-                if (groupBy.value === 'hour') key = d.getHours().toString().padStart(2, '0') + ':00';
-                else if (groupBy.value === 'weekday') key = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getDay()];
-                else key = d.toISOString().slice(0,10);
-                const cur = g.get(key) || [];
-                cur.push(w);
-                g.set(key, cur);
+                const v = w[metricKey];
+                const label = v === null || v === undefined ? 'null' : String(v);
+                counts.set(label, (counts.get(label) || 0) + 1);
             });
-            const labels = Array.from(g.keys());
-            const values = labels.map(l => {
-                const arr = g.get(l);
-                if (!arr || arr.length === 0) return 0;
-                switch (metric.value) {
-                    case 'temp': return +(arr.reduce((a,b)=>a+b.temp,0)/arr.length).toFixed(1);
-                    case 'feels': return +(arr.reduce((a,b)=>a+b.feels,0)/arr.length).toFixed(1);
-                    case 'humidity': return +(arr.reduce((a,b)=>a+b.humidity,0)/arr.length).toFixed(1);
-                    case 'wind': return +(arr.reduce((a,b)=>a+b.wind,0)/arr.length).toFixed(1);
-                    case 'pressure': return +(arr.reduce((a,b)=>a+b.pressure,0)/arr.length).toFixed(1);
-                    default: return 0;
-                }
-            });
+            const labels = Array.from(counts.keys());
+            const values = labels.map(l => counts.get(l));
             return { labels, values };
+        } else {
+            let nums = data.map(w => {
+                const v = w[metricKey];
+                const n = (v === null || v === undefined) ? NaN : Number(v);
+                return isNaN(n) ? null : n;
+            }).filter(x => x !== null);
+            if (nums.length === 0) return { labels: [], values: [] };
+            const min = Math.min(...nums);
+            const max = Math.max(...nums);
+            const buckets = 5;
+            const range = Math.max(1e-9, max - min);
+            const bucketCounts = new Array(buckets).fill(0);
+            const labels = new Array(buckets).fill(0).map((_,i) => {
+                const from = (min + (i * range / buckets));
+                const to = (i === buckets-1) ? max : (min + ((i+1) * range / buckets));
+                return `${from.toFixed(1)}–${to.toFixed(1)}`;
+            });
+            nums.forEach(n => {
+                const idx = Math.min(buckets - 1, Math.floor(((n - min) / range) * buckets));
+                bucketCounts[Math.max(0, idx)]++;
+            });
+            return { labels, values: bucketCounts };
         }
+    }
 
-        function rebuildConfig() {
-            const { labels, values } = groupData();
-            const labelName = {
-                temp: 'Температура (°C)',
-                feels: 'Ощущается (°C)',
-                humidity: 'Влажность (%)',
-                wind: 'Скорость ветра (м/с)',
-                pressure: 'Давление (мм рт. ст.)'
-            }[metric.value] || 'Значение';
+    function getMetricMeta(key) {
+        const opts = window.__metricOptions || [];
+        return opts.find(o => o.key === key) || opts[0] || { key: null, display: null, type: 'numeric' };
+    }
 
+    function rebuildConfig() {
+        const metricKey = metric.value;
+        const meta = getMetricMeta(metricKey);
+        if (chartTypeEl.value === 'pie') {
+            const pie = buildPieForMetric(metricKey, meta.type);
+            const bg = pie.labels.map((_,i) => palette[i % palette.length]);
             return {
-                type: chartType.value,
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: labelName,
-                        data: values,
-                        fill: false,
-                        tension: 0.2,
-                        pointRadius: 3
-                    }]
-                },
+                type: 'pie',
+                data: { labels: pie.labels, datasets: [{ label: meta.display || metricKey, data: pie.values, backgroundColor: bg }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            };
+        } else {
+            const grouped = groupDataForMetric(metricKey);
+            const metricIndex = (window.__metricOptions || []).findIndex(o => o.key === metricKey);
+            const color = palette[(metricIndex >= 0 ? metricIndex : 0) % palette.length];
+            return {
+                type: chartTypeEl.value,
+                data: { labels: grouped.labels, datasets: [{ label: meta.display || metricKey, data: grouped.values, borderColor: color, backgroundColor: color, fill: false, tension: 0.2, pointRadius: 3 }] },
                 options: { responsive: true, maintainAspectRatio: false }
             };
         }
+    }
 
-        updateBtn.addEventListener('click', () => {
-            const cfg = rebuildConfig();
-            if (cfg.data.labels.length > 0) {
-                noDataEl.style.display = 'none';
-                buildChart(cfg);
-            } else {
-                noDataEl.style.display = 'block';
-            }
-        });
-
-        resetBtn.addEventListener('click', () => {
-            chartType.value = 'line';
-            groupBy.value = 'day';
-            metric.value = 'temp';
-            const cfg = rebuildConfig();
+    updateBtn.addEventListener('click', () => {
+        const cfg = rebuildConfig();
+        if ((cfg.data.labels && cfg.data.labels.length > 0) || (cfg.data.datasets && cfg.data.datasets[0].data && cfg.data.datasets[0].data.length > 0)) {
+            noDataEl.style.display = 'none';
             buildChart(cfg);
-            noDataEl.style.display = cfg.data.labels.length > 0 ? 'none' : 'block';
-        });
+        } else {
+            noDataEl.style.display = 'block';
+            if (chart) chart.destroy();
+        }
+    });
 
-        const initCfg = rebuildConfig();
-        buildChart(initCfg);
-        noDataEl.style.display = initCfg.data.labels.length > 0 ? 'none' : 'block';
-    })();
+    resetBtn.addEventListener('click', () => {
+        chartTypeEl.value = 'line';
+        groupBy.value = 'day';
+        metric.value = window.__metricOptions && window.__metricOptions[0] ? window.__metricOptions[0].key : '';
+        const cfg = rebuildConfig();
+        buildChart(cfg);
+        noDataEl.style.display = (cfg.data.labels && cfg.data.labels.length > 0) ? 'none' : 'block';
+    });
+
+    const initCfg = rebuildConfig();
+    buildChart(initCfg);
+    noDataEl.style.display = (initCfg.data.labels && initCfg.data.labels.length > 0) ? 'none' : 'block';
+})();
 </script>

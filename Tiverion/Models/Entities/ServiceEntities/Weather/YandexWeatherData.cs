@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Text.Json;
+using System.ComponentModel;
 using System.Text.Json.Serialization;
-using Tiverion.Models.Clients.Contracts;
 
 namespace Tiverion.Models.Entities.ServiceEntities.Weather
 {
@@ -18,55 +15,63 @@ namespace Tiverion.Models.Entities.ServiceEntities.Weather
     public record CurrentWeather
     {
         [JsonPropertyName("temperatureCels")]
+        [DisplayName("Температура (°C)")]
         public float TemperatureCels { get; private set; }
 
         [JsonPropertyName("feelsLikeCels")]
+        [DisplayName("Ощущается (°C)")]
         public float FeelsLikeCels { get; private set; }
 
         [JsonPropertyName("humidity")]
+        [DisplayName("Влажность (%)")]
         public int Humidity { get; private set; }
 
         [JsonPropertyName("condition")]
+        [DisplayName("Состояние")]
         public Condition Condition { get; private set; }
 
         [JsonPropertyName("cloudiness")]
+        [DisplayName("Облачность")]
         public Cloudiness Cloudiness { get; private set; }
 
         [JsonPropertyName("daytime")]
+        [DisplayName("Время суток")]
         public Daytime Daytime { get; private set; }
 
         [JsonPropertyName("windSpeedMpS")]
+        [DisplayName("Скорость ветра (м/с)")]
         public float WindSpeedMpS { get; private set; }
 
         [JsonPropertyName("windGustMpS")]
+        [DisplayName("Порыв ветра (м/с)")]
         public float WindGustMpS { get; private set; }
 
         [JsonPropertyName("windDirection")]
+        [DisplayName("Направление ветра")]
         public WindDirection WindDirection { get; private set; }
 
         [JsonPropertyName("pressureMmHg")]
+        [DisplayName("Давление (мм рт. ст.)")]
         public int PressureMmHg { get; private set; }
 
         [JsonPropertyName("pressurePa")]
+        [DisplayName("Давление (Па)")]
         public int PressurePa { get; private set; }
 
         [JsonPropertyName("visibilityKm")]
+        [DisplayName("Видимость (км)")]
         public int VisibilityKm { get; private set; }
-        
+
         [JsonPropertyName("kpIndex")]
+        [DisplayName("KP индекс")]
         public double KpIndex { get; private set; }
 
         [JsonPropertyName("pollution")]
+        [DisplayName("Загрязнение")]
         public PollutionInfo Pollution { get; private set; }
-
-        public DateTime Timestamp { get; private set; } = DateTime.UtcNow;
         
-        public double Lat { get; set; }
-        public double Lon { get; set; }
 
-        public string TaskId { get; set; } = "";
-
-        private CurrentWeather() { }
+        protected CurrentWeather() { }
 
         public CurrentWeather(
             float temperatureCels,
@@ -81,9 +86,8 @@ namespace Tiverion.Models.Entities.ServiceEntities.Weather
             int pressureMmHg,
             int pressurePa,
             int visibilityKm,
-            PollutionInfo pollution,
-            double lat,
-            double lon)
+            double kpIndex,
+            PollutionInfo pollution)
         {
             TemperatureCels = temperatureCels;
             FeelsLikeCels = feelsLikeCels;
@@ -97,9 +101,8 @@ namespace Tiverion.Models.Entities.ServiceEntities.Weather
             PressureMmHg = pressureMmHg;
             PressurePa = pressurePa;
             VisibilityKm = visibilityKm;
+            KpIndex = kpIndex;
             Pollution = pollution;
-            lat = lat;
-            lon = lon;
         }
     }
 

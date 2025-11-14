@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Tiverion.Data.Context;
 using Tiverion.Models.Entities.Dto;
+using Tiverion.Models.Entities.Enums;
 using Tiverion.Models.Entities.ServiceEntities;
+using Tiverion.Models.Entities.ServiceEntities.Weather;
 using Tiverion.Models.Platform;
 using Tiverion.Models.Platform.Tasks;
 using Tiverion.Models.ViewModels.Stats;
@@ -52,6 +54,59 @@ public class StatsController : Controller
         };
         return View(model);
     }
+    
+    [HttpGet]
+    public IActionResult Analysis()
+    {
+        return View(new AnalysisRangeDto());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult Analysis(WeatherConditionRangeDto input)
+    {
+        var query = _cache.WeatherStamps.AsQueryable();
+        if (input.FromDate.HasValue) query = query.Where(w => w.Timestamp >= input.FromDate.Value);
+        if (input.ToDate.HasValue) query = query.Where(w => w.Timestamp <= input.ToDate.Value);
+        var list = query.ToList();
+        if (!list.Any()) return View(new AnalysisRangeDto { Input = input, ResultPercent = 0 });
+
+        int countMatching = 0;
+        foreach (var w in list)
+        {
+            bool matches = true;
+            if (input.NumericRanges != null)
+            {
+                foreach (var kv in input.NumericRanges)
+                {
+                    var prop = typeof(CurrentWeather).GetProperty(kv.Key);
+                    if (prop == null) continue;
+                    var val = Convert.ToDouble(prop.GetValue(w));
+                    if (kv.Value.From.HasValue && val < kv.Value.From.Value) { matches = false; break; }
+                    if (kv.Value.To.HasValue && val > kv.Value.To.Value) { matches = false; break; }
+                }
+            }
+
+            if (matches && input.EnumRanges != null)
+            {
+                foreach (var kv in input.EnumRanges)
+                {
+                    var prop = typeof(CurrentWeather).GetProperty(kv.Key);
+                    if (prop == null) continue;
+                    var val = Convert.ToInt32(prop.GetValue(w));
+                    if (kv.Value.From.HasValue && val < kv.Value.From.Value) { matches = false; break; }
+                    if (kv.Value.To.HasValue && val > kv.Value.To.Value) { matches = false; break; }
+                }
+            }
+
+            if (matches) countMatching++;
+        }
+
+        double percent = list.Count == 0 ? 0 : (countMatching * 100.0 / list.Count);
+        return View(new AnalysisRangeDto { Input = input, ResultPercent = percent });
+    }
+
+
     
     public async Task<IActionResult> Tasks()
     {

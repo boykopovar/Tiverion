@@ -10,5 +10,5 @@ public class DashboardViewModel
     
     public required List<StatsTask> Tasks { get; set; }
     public required List<StatsTaskResult> LastDayResults { get; set; }
-    public required List<CurrentWeather> LastDayWeatherStamps { get; set; }
+    public required List<WeatherStamp> LastDayWeatherStamps { get; set; }
 }
