@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -66,8 +67,18 @@ public class StatsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Analysis(WeatherConditionRangeDto input)
+    public async Task<IActionResult> Analysis(AnalysisRangeDto analysisDto)
     {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+        
+        var input = analysisDto.Input;
+        if (input is null)
+        {
+            TempData["Error"] = "Данные не заполнены!";
+            return RedirectToAction("Analysis");
+        }
+        
         var query = _cache.WeatherStamps
             .AsQueryable();
         
@@ -76,45 +87,132 @@ public class StatsController : Controller
         if (input.ToDate.HasValue) query = query
             .Where(w => w.Timestamp <= input.ToDate.Value);
         
-        var list = await query
-            .ToListAsync();
-        if (!list.Any()) return View(new AnalysisRangeDto { Input = input, ResultPercent = 0 });
+        var properties = (input.NumericRanges?.Keys ?? Enumerable.Empty<string>())
+            .Concat(input.EnumRanges?.Keys ?? Enumerable.Empty<string>())
+            .Select(k => typeof(CurrentWeather).GetProperty(k))
+            .Where(p => p is not null)
+            .Select(p => p!)
+            .ToList();
+        
+        if (!properties.Any()) return View(new AnalysisRangeDto { Input = input, ResultPercent = 0 });
+
+        List<WeatherStamp> stamps;
+        if(analysisDto.ByAverage)
+            stamps = await _GetAverageByInterval(query, properties, analysisDto.SpanForAverageHours);
+        else
+            stamps = await query.ToListAsync();
 
         int countMatching = 0;
-        foreach (var w in list)
+
+        foreach (var w in stamps)
         {
             bool matches = true;
-            if (input.NumericRanges != null)
+
+            foreach (var prop in properties)
             {
-                foreach (var kv in input.NumericRanges)
+                if (!matches) break;
+
+                var name = prop.Name;
+
+                if (input.NumericRanges != null && input.NumericRanges.TryGetValue(name, out var numericRange))
                 {
-                    var prop = typeof(CurrentWeather).GetProperty(kv.Key);
-                    if (prop is null) continue;
                     var val = Convert.ToDouble(prop.GetValue(w));
-
-                    if (kv.Value.From.HasValue && val < kv.Value.From.Value) { matches = false; break; }
-                    if (kv.Value.To.HasValue && val > kv.Value.To.Value) { matches = false; break; }
+                    if (numericRange.From.HasValue && val < numericRange.From.Value ||
+                        numericRange.To.HasValue && val > numericRange.To.Value)
+                    {
+                        matches = false;
+                        break;
+                    }
                 }
-            }
 
-            if (matches && input.EnumRanges != null)
-            {
-                foreach (var kv in input.EnumRanges)
+                if (matches && input.EnumRanges != null && input.EnumRanges.TryGetValue(name, out var enumRange))
                 {
-                    var prop = typeof(CurrentWeather).GetProperty(kv.Key);
-                    if (prop == null) continue;
                     var val = Convert.ToInt32(prop.GetValue(w));
-                    if (kv.Value.From.HasValue && val < kv.Value.From.Value) { matches = false; break; }
-                    if (kv.Value.To.HasValue && val > kv.Value.To.Value) { matches = false; break; }
+                    if (enumRange.From.HasValue && val < enumRange.From.Value ||
+                        enumRange.To.HasValue && val > enumRange.To.Value)
+                    {
+                        matches = false;
+                        break;
+                    }
                 }
             }
 
             if (matches) countMatching++;
         }
 
-        double percent = list.Count == 0 ? 0 : (countMatching * 100.0 / list.Count);
-        return View(new AnalysisRangeDto { Input = input, ResultPercent = percent });
+
+        double percent = stamps.Count == 0 ? 0 : (countMatching * 100.0 / stamps.Count);
+        analysisDto.ResultPercent = percent;
+        
+        return View(analysisDto);
     }
+
+    public async Task<List<WeatherStamp>> _GetAverageByInterval(
+        IQueryable<WeatherStamp> query,
+        List<PropertyInfo> properties,
+        int spanHours = 24)
+    {
+        var list = await query.ToListAsync();
+        var result = new List<WeatherStamp>();
+
+        if (!list.Any())
+            return result;
+
+        list = list
+            .OrderBy(s => s.Timestamp)
+            .ToList();
+        
+        var start = list.First().Timestamp;
+        var end = list.Last().Timestamp;
+
+        for (var intervalStart = start; intervalStart <= end; intervalStart = intervalStart.AddHours(spanHours))
+        {
+            var intervalEnd = intervalStart.AddHours(spanHours);
+            var intervalGroup = list
+                .Where(w => w.Timestamp >= intervalStart && w.Timestamp < intervalEnd)
+                .ToList();
+
+            if (!intervalGroup.Any())
+                continue;
+
+            var avgStamp = new WeatherStamp();
+            avgStamp.Timestamp = intervalStart;
+
+            foreach (var prop in properties)
+            {
+                if (prop.PropertyType.IsEnum)
+                {
+                    var values = intervalGroup.Select(w => (int)prop.GetValue(w)!).ToList();
+                    if (values.Any())
+                    {
+                        var mode = values
+                            .GroupBy(v => v)
+                            .OrderByDescending(g => g.Count())
+                            .First().Key;
+
+                        prop.SetValue(avgStamp, Enum.ToObject(prop.PropertyType, mode));
+                    }
+                }
+                else
+                {
+                    var values = intervalGroup
+                        .Select(w => Convert.ToDouble(prop.GetValue(w)))
+                        .ToList();
+
+                    if (values.Any())
+                        prop.SetValue(avgStamp, Convert.ChangeType(values.Average(), prop.PropertyType));
+                }
+            }
+
+            result.Add(avgStamp);
+        }
+
+        return result;
+    }
+
+
+
+
 
 
     

@@ -3,7 +3,9 @@ namespace Tiverion.Models.ViewModels.Stats;
 public class AnalysisRangeDto
 {
     public WeatherConditionRangeDto? Input { get; set; }
-    public double? ResultPercent { get; set; }
+    public bool ByAverage { get; set; } = true;
+    public int SpanForAverageHours { get; set; } = 24;
+    public double? ResultPercent { get; set; } = null;
 }
 
 
