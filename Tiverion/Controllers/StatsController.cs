@@ -55,20 +55,29 @@ public class StatsController : Controller
         return View(model);
     }
     
-    [HttpGet]
-    public IActionResult Analysis()
+    
+    public async Task<IActionResult> Analysis()
     {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+        
         return View(new AnalysisRangeDto());
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult Analysis(WeatherConditionRangeDto input)
+    public async Task<IActionResult> Analysis(WeatherConditionRangeDto input)
     {
-        var query = _cache.WeatherStamps.AsQueryable();
-        if (input.FromDate.HasValue) query = query.Where(w => w.Timestamp >= input.FromDate.Value);
-        if (input.ToDate.HasValue) query = query.Where(w => w.Timestamp <= input.ToDate.Value);
-        var list = query.ToList();
+        var query = _cache.WeatherStamps
+            .AsQueryable();
+        
+        if (input.FromDate.HasValue) query = query
+            .Where(w => w.Timestamp >= input.FromDate.Value);
+        if (input.ToDate.HasValue) query = query
+            .Where(w => w.Timestamp <= input.ToDate.Value);
+        
+        var list = await query
+            .ToListAsync();
         if (!list.Any()) return View(new AnalysisRangeDto { Input = input, ResultPercent = 0 });
 
         int countMatching = 0;
@@ -80,8 +89,9 @@ public class StatsController : Controller
                 foreach (var kv in input.NumericRanges)
                 {
                     var prop = typeof(CurrentWeather).GetProperty(kv.Key);
-                    if (prop == null) continue;
+                    if (prop is null) continue;
                     var val = Convert.ToDouble(prop.GetValue(w));
+
                     if (kv.Value.From.HasValue && val < kv.Value.From.Value) { matches = false; break; }
                     if (kv.Value.To.HasValue && val > kv.Value.To.Value) { matches = false; break; }
                 }
