@@ -11,4 +11,10 @@ public static class EnumExtensions
         var attr = field?.GetCustomAttribute<DisplayAttribute>();
         return attr?.Name ?? value.ToString();
     }
+
+    public static string GetDisplayName(PropertyInfo field)
+    {
+        var name = field.GetCustomAttribute<DisplayAttribute>();
+        return name?.Name ?? field.Name;
+    }
 }
