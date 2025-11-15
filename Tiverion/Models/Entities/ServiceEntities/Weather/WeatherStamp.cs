@@ -3,14 +3,14 @@ namespace Tiverion.Models.Entities.ServiceEntities.Weather;
 
 public record WeatherStamp : CurrentWeather
 {
-    public DateTime Timestamp { get; private set; } = DateTime.UtcNow;
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
     public double Lat { get; set; }
     public double Lon { get; set; }
 
     public string TaskId { get; set; } = "";
     
-    private WeatherStamp() {}
+    public WeatherStamp() {}
     
     public WeatherStamp(CurrentWeather weather, MapPoint location, string taskId = "") : base(
         weather.TemperatureCels,

@@ -9,20 +9,21 @@ Layout = "_Layout";
 ViewData["Title"] = "Анализ";
 
 var numericProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-    .Where(p => p.PropertyType.IsValueType && !p.PropertyType.IsEnum)
-    .ToArray();
+.Where(p => p.PropertyType.IsValueType && !p.PropertyType.IsEnum)
+.ToArray();
 
 var enumProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-    .Where(p => p.PropertyType.IsEnum)
-    .ToArray();
+.Where(p => p.PropertyType.IsEnum)
+.ToArray();
 
 string GetDisplayName(PropertyInfo p) =>
-    p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
+p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
 }
+
 <section class="dashboard">
     <partial name="_TopNav" />
     <div class="dashboard-inner">
-        
+
         <h1 class="title">Анализ</h1>
         <p class="subtitle">Вероятность возникновения погодных условий.</p>
 
@@ -30,20 +31,20 @@ string GetDisplayName(PropertyInfo p) =>
 
         @if (Model.ResultPercent.HasValue)
         {
-            <div class="card" style="margin:16px 0; padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-                <div style="display:flex; flex-direction:column; gap:6px;">
-                    <div style="font-weight:800; font-size:32px; color:var(--color-card-highlight);">
-                        @Model.ResultPercent.Value.ToString("F1") %
-                    </div>
-                    <div style="color:var(--color-card-subtext); font-size:14px;">
-                        Вероятность появления комбинации погодных параметров.
-                    </div>
+        <div class="card" style="margin:16px 0; padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="font-weight:800; font-size:32px; color:var(--color-card-highlight);">
+                    @Model.ResultPercent.Value.ToString("F1") %
                 </div>
-
-                <div style="color:var(--color-card-subtext); font-size:13px;">
-                    Обработано записей: @(Model.Input == null ? 0 : "—")
+                <div style="color:var(--color-card-subtext); font-size:14px;">
+                    Вероятность появления комбинации погодных параметров.
                 </div>
             </div>
+
+            <div style="color:var(--color-card-subtext); font-size:13px;">
+                Обработано записей: —
+            </div>
+        </div>
         }
 
         <form asp-action="Analysis" method="post" class="auth-panel" style="width:100%; max-width:1200px; box-sizing:border-box; padding:20px; display:block;">
@@ -52,11 +53,11 @@ string GetDisplayName(PropertyInfo p) =>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
                 <div>
                     <label style="display:block; margin-bottom:6px;">С даты</label>
-                    <input type="date" name="FromDate" class="form-input" value="@Model.Input?.FromDate?.ToString("yyyy-MM-dd")" style="width:100%;"/>
+                    <input type="date" name="Input.FromDate" class="form-input" value="@Model.Input?.FromDate?.ToString("yyyy-MM-dd")" style="width:100%;"/>
                 </div>
                 <div>
                     <label style="display:block; margin-bottom:6px;">По дату</label>
-                    <input type="date" name="ToDate" class="form-input" value="@Model.Input?.ToDate?.ToString("yyyy-MM-dd")" style="width:100%;"/>
+                    <input type="date" name="Input.ToDate" class="form-input" value="@Model.Input?.ToDate?.ToString("yyyy-MM-dd")" style="width:100%;"/>
                 </div>
             </div>
 
@@ -64,31 +65,21 @@ string GetDisplayName(PropertyInfo p) =>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 @foreach (var p in numericProps)
                 {
-                    var displayName = GetDisplayName(p);
-                    var fromVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].From?.ToString() : "";
-                    var toVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].To?.ToString() : "";
+                var displayName = GetDisplayName(p);
+                var fromVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].From?.ToString() : "";
+                var toVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].To?.ToString() : "";
 
-                    <div style="
-                        display:flex;
-                        flex-wrap:wrap;
-                        gap:8px;
-                        align-items:center;
-                    ">
-
-                        <div style="flex:0 1 auto; min-width:300px;">
-                            <label style="display:block; margin-bottom:6px;">@displayName</label>
-                        </div>
-
-                        <div style="flex:1 1 200px; min-width:300px;">
-                            <input type="number" step="any" name="NumericRanges[@p.Name].From"
-                                   placeholder="От" class="form-input" value="@fromVal" style="width:100%;"/>
-                        </div>
-
-                        <div style="flex:1 1 200px; min-width:300px;">
-                            <input type="number" step="any" name="NumericRanges[@p.Name].To"
-                                   placeholder="До" class="form-input" value="@toVal" style="width:100%;"/>
-                        </div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                    <div style="flex:0 1 auto; min-width:300px;">
+                        <label style="display:block; margin-bottom:6px;">@displayName</label>
                     </div>
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <input type="number" step="any" name="Input.NumericRanges[@p.Name].From" placeholder="От" class="form-input" value="@fromVal" style="width:100%;"/>
+                    </div>
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <input type="number" step="any" name="Input.NumericRanges[@p.Name].To" placeholder="До" class="form-input" value="@toVal" style="width:100%;"/>
+                    </div>
+                </div>
                 }
             </div>
 
@@ -96,64 +87,67 @@ string GetDisplayName(PropertyInfo p) =>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 @foreach (var p in enumProps)
                 {
-                    var displayName = GetDisplayName(p);
-                    var selectedFrom = Model.Input?.EnumRanges != null && Model.Input.EnumRanges.ContainsKey(p.Name) ? Model.Input.EnumRanges[p.Name].From?.ToString() : "";
-                    var selectedTo = Model.Input?.EnumRanges != null && Model.Input.EnumRanges.ContainsKey(p.Name) ? Model.Input.EnumRanges[p.Name].To?.ToString() : "";
+                var displayName = GetDisplayName(p);
+                var selectedFrom = Model.Input?.EnumRanges != null && Model.Input.EnumRanges.ContainsKey(p.Name) ? Model.Input.EnumRanges[p.Name].From : null;
+                var selectedTo = Model.Input?.EnumRanges != null && Model.Input.EnumRanges.ContainsKey(p.Name) ? Model.Input.EnumRanges[p.Name].To : null;
 
-                    <div style="
-                        display:flex;
-                        flex-wrap: wrap;
-                        gap:8px;
-                        align-items:center;
-                    ">
-                        <div style="flex:1 1 200px; min-width:300px;">
-                            <label style="display:block; margin-bottom:6px;">@displayName</label>
-                        </div>
-
-                        <div style="flex:1 1 200px; min-width:300px;">
-                            <select name="EnumRanges[@p.Name].From" class="form-select" style="width:100%;">
-                                <option value="">Не выбрано</option>
-                                @foreach (var val in Enum.GetValues(p.PropertyType))
-                                {
-                                    var intVal = Convert.ToInt32(val);
-                                    var enumVal = (Enum)val;
-                                    var text = enumVal.GetDisplayName();
-
-                                    if (intVal.ToString() == selectedFrom)
-                                    {
-                                        <option value="@intVal" selected>@text</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="@intVal">@text</option>
-                                    }
-                                }
-
-                            </select>
-                        </div>
-
-                        <div style="flex:1 1 200px; min-width:300px;">
-                            <select name="EnumRanges[@p.Name].To" class="form-select" style="width:100%;">
-                                <option value="">Не выбрано</option>
-                                @foreach (var val in Enum.GetValues(p.PropertyType))
-                                {
-                                    var intVal = Convert.ToInt32(val);
-                                    var enumVal = (Enum)val;
-                                    var text = enumVal.GetDisplayName();
-
-                                    if (intVal.ToString() == selectedFrom)
-                                    {
-                                        <option value="@intVal" selected>@text</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="@intVal">@text</option>
-                                    }
-                                }
-                            </select>
-                        </div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <label style="display:block; margin-bottom:6px;">@displayName</label>
                     </div>
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <select name="Input.EnumRanges[@p.Name].From" class="form-select" style="width:100%;">
+                            <option value="">Не выбрано</option>
+                            @foreach (var val in Enum.GetValues(p.PropertyType))
+                            {
+                            var intVal = Convert.ToInt32(val);
+                            var enumVal = (Enum)val;
+                            var text = enumVal.GetDisplayName();
+                            if (selectedFrom == intVal)
+                            {
+                            <option value="@intVal" selected="selected">@text</option>
+                            }
+                            else
+                            {
+                            <option value="@intVal">@text</option>
+                            }
+                            }
+                        </select>
+                    </div>
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <select name="Input.EnumRanges[@p.Name].To" class="form-select" style="width:100%;">
+                            <option value="">Не выбрано</option>
+                            @foreach (var val in Enum.GetValues(p.PropertyType))
+                            {
+                            var intVal = Convert.ToInt32(val);
+                            var enumVal = (Enum)val;
+                            var text = enumVal.GetDisplayName();
+                            if (selectedTo == intVal)
+                            {
+                            <option value="@intVal" selected="selected">@text</option>
+                            }
+                            else
+                            {
+                            <option value="@intVal">@text</option>
+                            }
+                            }
+                        </select>
+                    </div>
+                </div>
                 }
+            </div>
+
+            <h3 style="margin:16px 0 8px 0;">Средние значения</h3>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    @Html.CheckBoxFor(m => m.ByAverage, new { @id = "byAvgCheckbox" })
+                    <label for="byAvgCheckbox" style="margin:0;">Считать по средним значениям</label>
+                </div>
+
+                <div id="avgBlock">
+                    <label style="display:block; margin-top:6px; margin-bottom:6px;">Период усреднения (часов)</label>
+                    <input type="number" min="1" max="168" name="SpanForAverageHours" class="form-input" value="@Model.SpanForAverageHours" style="width:200px;" />
+                </div>
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px;">
@@ -163,3 +157,14 @@ string GetDisplayName(PropertyInfo p) =>
         </form>
     </div>
 </section>
+
+<script>
+    const byAvgCheckbox = document.getElementById("byAvgCheckbox");
+    const avgBlock = document.getElementById("avgBlock");
+
+    avgBlock.style.display = byAvgCheckbox.checked ? "" : "none";
+
+    byAvgCheckbox.addEventListener("change", function() {
+        avgBlock.style.display = this.checked ? "" : "none";
+    });
+</script>
