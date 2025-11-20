@@ -1,3 +1,5 @@
+using Tiverion.Models.Entities.Enums;
+
 namespace Tiverion.Models.ViewModels.Stats;
 
 public class AnalysisRangeDto
@@ -6,6 +8,8 @@ public class AnalysisRangeDto
     public bool ByAverage { get; set; } = true;
     public int SpanForAverageHours { get; set; } = 24;
     public double? ResultPercent { get; set; } = null;
+    public GapSuccess GapSuccess { get; set; } = GapSuccess.Day;
+    public int? AmountSuccess { get; set; } = null;
 }
 
 

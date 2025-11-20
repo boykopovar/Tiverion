@@ -142,9 +142,44 @@ public class StatsController : Controller
 
 
         double percent = stamps.Count == 0 ? 0 : (countMatching * 100.0 / stamps.Count);
-        analysisDto.ResultPercent = percent;
+        //analysisDto.ResultPercent = percent;
+
+        TimeSpan gapSize = new TimeSpan(0);
+        if (!(input.FromDate is null || input.ToDate is null))
+            gapSize = (TimeSpan)(input.ToDate - input.FromDate);
+        
+        int? n = null;
+        n = analysisDto.GapSuccess == GapSuccess.Hour ? gapSize.Hours : null;
+        n = analysisDto.GapSuccess == GapSuccess.Day ? gapSize.Days : null;
+        n = analysisDto.GapSuccess == GapSuccess.Week ? gapSize.Days / 7 : null;
+        n = analysisDto.GapSuccess ==  GapSuccess.Month ? gapSize.Days / 30 : null;
+
+        double? resultPercent = null;
+
+        if (n != null && analysisDto.AmountSuccess != null)
+        {
+            resultPercent = _Factorial(n).Result /
+                            (_Factorial(analysisDto.AmountSuccess).Result * _Factorial(n - analysisDto.AmountSuccess).Result) * 
+                            Math.Pow(percent, n.Value) * 
+                            Math.Pow(1 - percent, n.Value - analysisDto.AmountSuccess.Value);
+        }
+        
+        analysisDto.ResultPercent = resultPercent;
         
         return View(analysisDto);
+    }
+
+    private async Task<long?> _Factorial(int? n)
+    {
+        long? result = 1;
+        if (n == null || n < 0)
+            throw new ArgumentOutOfRangeException("Factorial argument can not be negative");
+        while (n > 1)
+        {
+            result = (result * n);
+            n--;
+        }
+        return result;
     }
 
     public async Task<List<WeatherStamp>> _GetAverageByInterval(
