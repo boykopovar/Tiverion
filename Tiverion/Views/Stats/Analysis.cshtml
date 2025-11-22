@@ -1,5 +1,7 @@
 @using System.Reflection
 @using System.ComponentModel
+@using System.ComponentModel.DataAnnotations
+@using System.Text
 @using Tiverion.Models.Entities.Enums
 @using Tiverion.Models.Entities.ServiceEntities.Weather
 @model Tiverion.Models.ViewModels.Stats.AnalysisRangeDto
@@ -47,7 +49,7 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
         </div>
         }
 
-        <form asp-action="Analysis" method="post" class="auth-panel" style="width:100%; max-width:1200px; box-sizing:border-box; padding:20px; display:block;">
+        <form asp-action="Analysis" method="post" class="auth-panel" style="width:100%; max-width:1200px; box-sizing:border-box; padding:20px; display:block;" onsubmit="return convertToHours()">
             @Html.AntiForgeryToken()
 
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
@@ -119,22 +121,56 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
                             <option value="">Не выбрано</option>
                             @foreach (var val in Enum.GetValues(p.PropertyType))
                             {
-                            var intVal = Convert.ToInt32(val);
-                            var enumVal = (Enum)val;
-                            var text = enumVal.GetDisplayName();
-                            if (selectedTo == intVal)
-                            {
-                            <option value="@intVal" selected="selected">@text</option>
-                            }
-                            else
-                            {
-                            <option value="@intVal">@text</option>
-                            }
+                                var intVal = Convert.ToInt32(val);
+                                var enumVal = (Enum)val;
+                                var text = enumVal.GetDisplayName();
+                                if (selectedTo == intVal)
+                                {
+                                    <option value="@intVal" selected="selected">@text</option>
+                                }
+                                else
+                                {
+                                    <option value="@intVal">@text</option>
+                                }
                             }
                         </select>
                     </div>
                 </div>
                 }
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <label style="display:block; margin-bottom:6px;">Единица времени</label>
+                    </div>
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <select id="periodDropdown" name="Input.Period" class="form-select" style="width:100%;">
+                            @{
+                                //var sb = new System.Text.StringBuilder();
+                                foreach (TimePeriod period in Enum.GetValues(typeof(TimePeriod)))
+                                {
+                                    var member = typeof(TimePeriod).GetMember(period.ToString()).First();
+                                    var displayName = member.GetCustomAttribute<DisplayAttribute>()?.Name ?? period.ToString();
+                                    var intValue = (int)period;
+                                    var selected = period == TimePeriod.Day ? "selected" : null;
+                                    <option value="@intValue" selected="@(selected)">@displayName</option>
+                                    
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <input type="number" id="numberOfTrialsUnit" step="1" name="Input.NumberOfTrials" placeholder="Количество" class="form-input" style="width:100%;"/>
+                    </div>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <label style="display:block; margin-bottom:6px;">Соответствующие</label>
+                    </div>
+                    <div style="flex:1 1 200px; min-width:300px;">
+                    </div>
+                    <div style="flex:1 1 200px; min-width:300px;">
+                        <input type="number" id="amountSuccessUnit" step="1" name="Input.AmountSuccess" placeholder="Количество" class="form-input" style="width:100%;"/>
+                    </div>
+                </div>
             </div>
 
             <h3 style="margin:16px 0 8px 0;">Средние значения</h3>
@@ -150,6 +186,8 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
                 </div>
             </div>
 
+            <input type="hidden" id="selectedTrialValue" name="Input.SelectedTrialValue" />
+            
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px;">
                 <a class="btn outline" href="@Url.Action("Analysis", "Stats")">Сброс</a>
                 <button type="submit" class="btn primary">Вычислить вероятность</button>
@@ -167,4 +205,73 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
     byAvgCheckbox.addEventListener("change", function() {
         avgBlock.style.display = this.checked ? "" : "none";
     });
+
+    function convertToHours() {
+        const periodDropdown = document.getElementById('periodDropdown');
+        const numberOfTrialsUnit = document.getElementById('numberOfTrialsUnit');
+        const amountSuccessUnit = document.getElementById('amountSuccessUnit');
+
+        const selectedPeriod = parseInt(periodDropdown.value);
+        
+        let trialsInHours, successInHours;
+        
+        switch(selectedPeriod) {
+            case 1:
+                trialsInHours = parseInt(numberOfTrialsUnit.value) || 0;
+                successInHours = parseInt(amountSuccessUnit.value) || 0;
+                break;
+            case 24:
+                trialsInHours = (parseInt(numberOfTrialsUnit.value) || 0) * 24;
+                successInHours = (parseInt(amountSuccessUnit.value) || 0) * 24;
+                break;
+            case 168:
+                trialsInHours = (parseInt(numberOfTrialsUnit.value) || 0) * 168;
+                successInHours = (parseInt(amountSuccessUnit.value) || 0) * 168;
+                break;
+            default:
+                trialsInHours = parseInt(numberOfTrialsUnit.value) || 0;
+                successInHours = parseInt(amountSuccessUnit.value) || 0;
+        }
+        
+        numberOfTrialsUnit.value = trialsInHours;
+        amountSuccessUnit.value = successInHours;
+        
+        console.log('Trials in hours:', trialsInHours, 'Success in hours:', successInHours);
+        
+        return true;
+    }
+    
+    function updateDisplay() {
+        const periodDropdown = document.getElementById('periodDropdown');
+        const numberOfTrialsUnit = document.getElementById('numberOfTrialsUnit');
+        const amountSuccessUnit = document.getElementById('amountSuccessUnit');
+
+        const selectedPeriod = parseInt(periodDropdown.value);
+        
+        let trialsInHours, successInHours;
+        
+        switch(selectedPeriod) {
+            case 1:
+                trialsInHours = parseInt(numberOfTrialsUnit.value) || 0;
+                successInHours = parseInt(amountSuccessUnit.value) || 0;
+                break;
+            case 24:
+                trialsInHours = (parseInt(numberOfTrialsUnit.value) || 0) * 24;
+                successInHours = (parseInt(amountSuccessUnit.value) || 0) * 24;
+                break;
+            case 168:
+                trialsInHours = (parseInt(numberOfTrialsUnit.value) || 0) * 168;
+                successInHours = (parseInt(amountSuccessUnit.value) || 0) * 168;
+                break;
+            default:
+                trialsInHours = parseInt(numberOfTrialsUnit.value) || 0;
+                successInHours = parseInt(amountSuccessUnit.value) || 0;
+        }
+        
+        console.log('Current values in hours:', trialsInHours, successInHours);
+    }
+    
+    document.getElementById('periodDropdown').addEventListener('change', updateDisplay);
+    document.getElementById('numberOfTrialsUnit').addEventListener('input', updateDisplay);
+    document.getElementById('amountSuccessUnit').addEventListener('input', updateDisplay);
 </script>

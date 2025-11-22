@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
@@ -69,6 +70,9 @@ public class StatsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Analysis(AnalysisRangeDto analysisDto)
     {
+        string Json = JsonSerializer.Serialize(analysisDto, new JsonSerializerOptions { WriteIndented = true });
+        Console.WriteLine("DTO: ");
+        Console.WriteLine(Json);
         var actionAndUser = await ConfirmUser(User);
         if (actionAndUser.action is not null) return actionAndUser.action;
         
@@ -142,44 +146,46 @@ public class StatsController : Controller
 
 
         double percent = stamps.Count == 0 ? 0 : (countMatching * 100.0 / stamps.Count);
-        //analysisDto.ResultPercent = percent;
+        // analysisDto.ResultPercent = percent;
 
-        TimeSpan gapSize = new TimeSpan(0);
-        if (!(input.FromDate is null || input.ToDate is null))
-            gapSize = (TimeSpan)(input.ToDate - input.FromDate);
+        //  TimeSpan gapSize = new TimeSpan(0);
+        //  if (!(input.FromDate is null || input.ToDate is null))
+        //      gapSize = (TimeSpan)(input.ToDate - input.FromDate);
+        //
+        //
+        int n = analysisDto.Input.NumberOfTrials;
+        int k = analysisDto.Input.AmountSuccess; ;
+
+        percent = 50;
+         double resultPercent = -1;
         
-        int? n = null;
-        n = analysisDto.GapSuccess == GapSuccess.Hour ? gapSize.Hours : null;
-        n = analysisDto.GapSuccess == GapSuccess.Day ? gapSize.Days : null;
-        n = analysisDto.GapSuccess == GapSuccess.Week ? gapSize.Days / 7 : null;
-        n = analysisDto.GapSuccess ==  GapSuccess.Month ? gapSize.Days / 30 : null;
-
-        double? resultPercent = null;
-
-        if (n != null && analysisDto.AmountSuccess != null)
-        {
-            resultPercent = _Factorial(n).Result /
-                            (_Factorial(analysisDto.AmountSuccess).Result * _Factorial(n - analysisDto.AmountSuccess).Result) * 
-                            Math.Pow(percent, n.Value) * 
-                            Math.Pow(1 - percent, n.Value - analysisDto.AmountSuccess.Value);
-        }
+         if (n != -1 && k != -1)
+         {
+             resultPercent = CalculateBinomialProbability(n, k, percent);
+         }
         
         analysisDto.ResultPercent = resultPercent;
         
         return View(analysisDto);
     }
 
-    private async Task<long?> _Factorial(int? n)
+    private double CalculateBinomialProbability(int n, int k, double percent)
     {
-        long? result = 1;
-        if (n == null || n < 0)
-            throw new ArgumentOutOfRangeException("Factorial argument can not be negative");
-        while (n > 1)
+        if (n != -1 && k != -1)
         {
-            result = (result * n);
-            n--;
+            double p = percent / 100.0;
+            double logResult = 0.0;
+            
+            for (int i = 1; i <= k; i++)
+            {
+                logResult += Math.Log(n - i + 1) - Math.Log(i);
+            }
+            
+            logResult += k * Math.Log(p) + (n - k) * Math.Log(1 - p);
+            
+            return Math.Exp(logResult) * 100;
         }
-        return result;
+        return 0;
     }
 
     public async Task<List<WeatherStamp>> _GetAverageByInterval(
