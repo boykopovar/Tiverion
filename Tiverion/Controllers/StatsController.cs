@@ -155,14 +155,13 @@ public class StatsController : Controller
         //
         int n = analysisDto.Input.NumberOfTrials;
         int k = analysisDto.Input.AmountSuccess; ;
-
-        percent = 50;
-         double resultPercent = -1;
         
-         if (n != -1 && k != -1)
-         {
-             resultPercent = CalculateBinomialProbability(n, k, percent);
-         }
+        double resultPercent = -1;
+        
+        if (n != -1 && k != -1)
+        { 
+            resultPercent = CalculateBinomialProbability(n, k, percent);
+        }
         
         analysisDto.ResultPercent = resultPercent;
         
