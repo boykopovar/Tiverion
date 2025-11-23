@@ -153,8 +153,8 @@ public class StatsController : Controller
         //      gapSize = (TimeSpan)(input.ToDate - input.FromDate);
         //
         //
-        int n = analysisDto.Input.NumberOfTrials;
-        int k = analysisDto.Input.AmountSuccess; ;
+        int n = analysisDto.Input.NumberOfTrials / (int) analysisDto.Input.Period;
+        int k = analysisDto.Input.AmountSuccess / (int) analysisDto.Input.Period;
         
         double resultPercent = -1;
         
@@ -162,7 +162,6 @@ public class StatsController : Controller
         { 
             resultPercent = CalculateBinomialProbability(n, k, percent);
         }
-        
         analysisDto.ResultPercent = resultPercent;
         
         return View(analysisDto);

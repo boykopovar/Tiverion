@@ -20,7 +20,7 @@ public class WeatherConditionRangeDto
     public Dictionary<string, NumericRange>? EnumRanges { get; set; } = new();
     public int NumberOfTrials {get; set; } = -1;
     public int AmountSuccess { get; set; } = -1;
-    public int? SelectedTrialValue { get; set; }
+    public TimePeriod? Period { get; set; } = TimePeriod.Day;
     // public Dictionary<string, int?> Period { get; set; } = new();
 }
 
