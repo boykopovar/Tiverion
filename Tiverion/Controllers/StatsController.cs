@@ -70,9 +70,6 @@ public class StatsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Analysis(AnalysisRangeDto analysisDto)
     {
-        string Json = JsonSerializer.Serialize(analysisDto, new JsonSerializerOptions { WriteIndented = true });
-        Console.WriteLine("DTO: ");
-        Console.WriteLine(Json);
         var actionAndUser = await ConfirmUser(User);
         if (actionAndUser.action is not null) return actionAndUser.action;
         
@@ -146,13 +143,6 @@ public class StatsController : Controller
 
 
         double percent = stamps.Count == 0 ? 0 : (countMatching * 100.0 / stamps.Count);
-        // analysisDto.ResultPercent = percent;
-
-        //  TimeSpan gapSize = new TimeSpan(0);
-        //  if (!(input.FromDate is null || input.ToDate is null))
-        //      gapSize = (TimeSpan)(input.ToDate - input.FromDate);
-        //
-        //
         int n = analysisDto.Input.NumberOfTrials / (int) analysisDto.Input.Period;
         int k = analysisDto.Input.AmountSuccess / (int) analysisDto.Input.Period;
         

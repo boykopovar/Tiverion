@@ -21,7 +21,6 @@ public class WeatherConditionRangeDto
     public int NumberOfTrials {get; set; } = -1;
     public int AmountSuccess { get; set; } = -1;
     public TimePeriod? Period { get; set; } = TimePeriod.Day;
-    // public Dictionary<string, int?> Period { get; set; } = new();
 }
 
 public class NumericRange
@@ -29,9 +28,3 @@ public class NumericRange
     public double? From { get; set; }
     public double? To { get; set; }
 }
-
-// public class Trial
-// {
-//     public int? NumberOfTrials { get; set; }
-//     public int? AmountSuccess { get; set; }
-// }
