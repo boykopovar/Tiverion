@@ -142,7 +142,7 @@ public class StatsController : Controller
         }
 
 
-        double percent = stamps.Count == 0 ? 0 : (countMatching * 100.0 / stamps.Count);
+        analysisDto.Percent = stamps.Count == 0 ? 0 : (countMatching * 100.0 / stamps.Count);
         int n = analysisDto.Input.NumberOfTrials / (int) analysisDto.Input.Period;
         int k = analysisDto.Input.AmountSuccess / (int) analysisDto.Input.Period;
         
@@ -150,7 +150,7 @@ public class StatsController : Controller
         
         if (n != -1 && k != -1)
         { 
-            resultPercent = CalculateBinomialProbability(n, k, percent);
+            resultPercent = CalculateBinomialProbability(n, k, analysisDto.Percent);
         }
         analysisDto.ResultPercent = resultPercent;
         

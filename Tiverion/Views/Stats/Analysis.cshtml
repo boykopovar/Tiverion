@@ -20,6 +20,32 @@ var enumProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | Bindi
 
 string GetDisplayName(PropertyInfo p) =>
 p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
+
+string GetPeriodDisplayName(TimePeriod? period, int count)
+{
+    if (!period.HasValue) period = TimePeriod.Day;
+        
+    var baseName = period switch
+    {
+        TimePeriod.Hour => "час",
+        TimePeriod.Day => "день",
+        TimePeriod.Week => "неделю",
+        _ => "день"
+    };
+    
+    if (count != 1)
+    {
+        baseName = period switch
+        {
+            TimePeriod.Hour => count < 5 ? "часа" : "часов",
+            TimePeriod.Day => count < 5 ? "дня" : "дней",
+            TimePeriod.Week => count < 5 ? "недели" : "недель",
+            _ => count < 5 ? "дня" : "дней"
+        };
+    }
+
+    return baseName;
+}
 }
 
 <section class="dashboard">
@@ -27,19 +53,24 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
     <div class="dashboard-inner">
 
         <h1 class="title">Анализ</h1>
-        <p class="subtitle">Вероятность возникновения погодных условий.</p>
+        <p class="subtitle">Расчет вероятности наступления погодных условий за определенный период.</p>
 
         <partial name="_ShowTempData"/>
 
         @if (Model.ResultPercent.HasValue)
         {
+            var k = Model.Input?.AmountSuccess / (int)(Model.Input?.Period ?? TimePeriod.Day) ?? 0;
+            var n = Model.Input?.NumberOfTrials / (int)(Model.Input?.Period ?? TimePeriod.Day) ?? 0;
+            var periodNameK = GetPeriodDisplayName(Model.Input?.Period, k);
+            var periodNameN = GetPeriodDisplayName(Model.Input?.Period, n);
+            
         <div class="card" style="margin:16px 0; padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
             <div style="display:flex; flex-direction:column; gap:6px;">
                 <div style="font-weight:800; font-size:32px; color:var(--color-card-highlight);">
-                    @Model.ResultPercent.Value.ToString("F1") %
+                    @Model.ResultPercent.Value.ToString("F3") %
                 </div>
                 <div style="color:var(--color-card-subtext); font-size:14px;">
-                    Вероятность появления комбинации погодных параметров.
+                    Появление <strong>@k @periodNameK</strong> за <strong>@n @periodNameN</strong> с шансом <strong>@Model.Percent</strong>
                 </div>
             </div>
 
@@ -69,32 +100,36 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
             <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
                 <div style="flex:1 1 200px;">
                     <label style="display:block; margin-bottom:6px;">Кол-во совпадений</label>
-                    <input type="number" id="amountSuccessUnit" step="1" name="Input.AmountSuccess"
-                           placeholder="k" class="form-input" style="width:100%;" />
+                    <input type="number" id="amountSuccessUnit" step="1"
+                           placeholder="k" class="form-input" style="width:100%;" value="@(Model.Input?.AmountSuccess / (int)(Model.Input?.Period ?? TimePeriod.Day))"/>
                 </div>
 
                 <div style="flex:1 1 200px;">
                     <label style="display:block; margin-bottom:6px;">Количество испытаний</label>
-                    <input type="number" id="numberOfTrialsUnit" step="1" name="Input.NumberOfTrials"
-                           placeholder="n" class="form-input" style="width:100%;" />
+                    <input type="number" id="numberOfTrialsUnit" step="1"
+                           placeholder="n" class="form-input" style="width:100%;" value="@(Model.Input?.NumberOfTrials / (int)(Model.Input?.Period ?? TimePeriod.Day))"/>
                 </div>
 
                 <div style="flex:1 1 200px;">
                     <label style="display:block; margin-bottom:6px;">Единица измерения</label>
                     <select id="periodDropdown" name="Input.Period" class="form-select" style="width:100%;">
                         @{
-                        foreach (TimePeriod period in Enum.GetValues(typeof(TimePeriod)))
-                        {
-                        var member = typeof(TimePeriod).GetMember(period.ToString()).First();
-                        var displayName = member.GetCustomAttribute<DisplayAttribute>()?.Name ?? period.ToString();
-                        var intValue = (int)period;
-                        var selected = period == TimePeriod.Day;
-                        <option value="@intValue" selected="@(selected)">@displayName</option>
-                        }
+                            foreach (TimePeriod period in Enum.GetValues(typeof(TimePeriod)))
+                            {
+                                var member = typeof(TimePeriod).GetMember(period.ToString()).First();
+                                var displayName = member.GetCustomAttribute<DisplayAttribute>()?.Name ?? period.ToString();
+                                var intValue = (int)period;
+                                var selected = Model.Input?.Period == period;
+                                <option value="@intValue" selected="@(selected)">@displayName</option>
+                            }
                         }
                     </select>
                 </div>
             </div>
+            
+            
+            <input type="hidden" id="amountSuccessHours" name="Input.AmountSuccess"/>
+            <input type="hidden" id="numberOfTrialsHours" name="Input.NumberOfTrials"/>
 
 
             <h3 style="margin:8px 0; margin-top: 20px;">Числовые параметры</h3>
@@ -119,7 +154,7 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
                 }
             </div>
 
-            <h3 style="margin:16px 0 8px 0;">Enum параметры</h3>
+            <h3 style="margin:16px 0 8px 0;">Типовые параметры</h3>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 @foreach (var p in enumProps)
                 {
@@ -177,7 +212,7 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
             <div style="display:flex; flex-direction:column; gap:10px;">
                 <div style="display:flex; align-items:center; gap:6px;">
                     @Html.CheckBoxFor(m => m.ByAverage, new { @id = "byAvgCheckbox" })
-                    <label for="byAvgCheckbox" style="margin:0;">Считать по средним значениям</label>
+                    <label for="byAvgCheckbox" style="margin:0;">Использовать усреднённые значения</label>
                 </div>
 
                 <div id="avgBlock">
@@ -210,15 +245,16 @@ p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
         const periodDropdown = document.getElementById('periodDropdown');
         const numberOfTrialsUnit = document.getElementById('numberOfTrialsUnit');
         const amountSuccessUnit = document.getElementById('amountSuccessUnit');
+        const amountSuccessHours = document.getElementById('amountSuccessHours');
+        const numberOfTrialsHours = document.getElementById('numberOfTrialsHours');
 
         const selectedPeriod = parseInt(periodDropdown.value);
         
-        let trialsInHours, successInHours;
-        trialsInHours = (parseInt(numberOfTrialsUnit.value) || 0) * selectedPeriod;
-        successInHours = (parseInt(amountSuccessUnit.value) || 0) * selectedPeriod;
+        const trialsInHours = (parseInt(numberOfTrialsUnit.value) || 0) * selectedPeriod;
+        const successInHours = (parseInt(amountSuccessUnit.value) || 0) * selectedPeriod;
         
-        numberOfTrialsUnit.value = trialsInHours;
-        amountSuccessUnit.value = successInHours;
+        numberOfTrialsHours.value = trialsInHours;
+        amountSuccessHours.value = successInHours;
         
         console.log('Trials in hours:', trialsInHours, 'Success in hours:', successInHours);
         

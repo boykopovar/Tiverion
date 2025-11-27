@@ -8,6 +8,7 @@ public class AnalysisRangeDto
     public bool ByAverage { get; set; } = true;
     public int SpanForAverageHours { get; set; } = 24;
     public double? ResultPercent { get; set; } = null;
+    public double Percent { get; set; } = 0;
 
 }
 
