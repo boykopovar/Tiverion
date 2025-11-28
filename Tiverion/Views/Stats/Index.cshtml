@@ -9,6 +9,7 @@
 Layout = "_Layout";
 ViewData["Title"] = "Статистика погоды";
 
+
 var weatherList = Model.WeatherStamps?.ToList() ?? new List<WeatherStamp>();
 
 var templateProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -74,8 +75,8 @@ var chartCfg = new {
         <h1 class="title">Статистика погоды</h1>
         <p class="subtitle">Просматривайте данные погоды и их динамику.</p>
         <div class="actions" style="margin-bottom: 1.5rem;">
-            <a class="btn primary" href="@Url.Action("Tasks", "Stats")">Список задач</a>
-            <a class="btn primary" href="@Url.Action("Analysis", "Stats")">Анализ</a>
+            <a class="btn primary" style = "margin-bottom: 4px;" href="@Url.Action("Tasks", "Stats")">Список задач</a>
+            <a class="btn primary" style = "margin-bottom: 4px;" href="@Url.Action("Analysis", "Stats")">Анализ</a>
         </div>
         <div style="margin-top: 1.5rem;">
             <h2 class="title">График погоды</h2>

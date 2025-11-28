@@ -1,51 +1,43 @@
 @using System.Reflection
 @using System.ComponentModel
 @using System.ComponentModel.DataAnnotations
-@using System.Text
+@using Microsoft.EntityFrameworkCore.Query
 @using Tiverion.Models.Entities.Enums
 @using Tiverion.Models.Entities.ServiceEntities.Weather
 @model Tiverion.Models.ViewModels.Stats.AnalysisRangeDto
 
 @{
-Layout = "_Layout";
-ViewData["Title"] = "Анализ";
+    Layout = "_Layout";
+    ViewData["Title"] = "Анализ";
 
-var numericProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-.Where(p => p.PropertyType.IsValueType && !p.PropertyType.IsEnum)
-.ToArray();
+    var numericProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.PropertyType.IsValueType && !p.PropertyType.IsEnum)
+        .ToArray();
 
-var enumProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-.Where(p => p.PropertyType.IsEnum)
-.ToArray();
+    var enumProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.PropertyType.IsEnum)
+        .ToArray();
 
-string GetDisplayName(PropertyInfo p) =>
-p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
+    string GetDisplayName(PropertyInfo p) =>
+        p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
 
-string GetPeriodDisplayName(TimePeriod? period, int count)
-{
-    if (!period.HasValue) period = TimePeriod.Day;
-        
-    var baseName = period switch
+
+    string GetPeriodDisplayName(TimePeriod period, int count)
     {
-        TimePeriod.Hour => "час",
-        TimePeriod.Day => "день",
-        TimePeriod.Week => "неделю",
-        _ => "день"
-    };
-    
-    if (count != 1)
-    {
-        baseName = period switch
-        {
-            TimePeriod.Hour => count < 5 ? "часа" : "часов",
-            TimePeriod.Day => count < 5 ? "дня" : "дней",
-            TimePeriod.Week => count < 5 ? "недели" : "недель",
-            _ => count < 5 ? "дня" : "дней"
-        };
+        var attribute = period.GetAttribute<CountForm>();
+        if (attribute is null) return period.GetDisplayName();
+
+        return ((CountForm)attribute).GetWordForm(count);
     }
 
-    return baseName;
-}
+    var defaultTo = DateTime.UtcNow;
+    
+    var monthAgo = DateTime.Today.AddMonths(-1);
+    if (monthAgo < DateTime.MinValue.Date)
+        monthAgo = DateTime.MinValue.Date;
+
+    var fromDate = Model.Input?.FromDate ?? monthAgo;
+    var toDate   = Model.Input?.ToDate   ?? defaultTo;
 }
 
 <section class="dashboard">
@@ -57,12 +49,10 @@ string GetPeriodDisplayName(TimePeriod? period, int count)
 
         <partial name="_ShowTempData"/>
 
-        @if (Model.ResultPercent.HasValue)
+        @if (Model.ResultPercent.HasValue && Model.Input != null)
         {
-            var k = Model.Input?.AmountSuccess / (int)(Model.Input?.Period ?? TimePeriod.Day) ?? 0;
-            var n = Model.Input?.NumberOfTrials / (int)(Model.Input?.Period ?? TimePeriod.Day) ?? 0;
-            var periodNameK = GetPeriodDisplayName(Model.Input?.Period, k);
-            var periodNameN = GetPeriodDisplayName(Model.Input?.Period, n);
+            var k = Model.Input?.AmountSuccess / (int)(Model.Input!.Period) ?? 0;
+            var n = Model.Input?.NumberOfTrials / (int)(Model.Input!.Period) ?? 0;
             
         <div class="card" style="margin:16px 0; padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
             <div style="display:flex; flex-direction:column; gap:6px;">
@@ -70,7 +60,9 @@ string GetPeriodDisplayName(TimePeriod? period, int count)
                     @Model.ResultPercent.Value.ToString("F3") %
                 </div>
                 <div style="color:var(--color-card-subtext); font-size:14px;">
-                    Появление <strong>@k @periodNameK</strong> за <strong>@n @periodNameN</strong> с шансом <strong>@Model.Percent</strong>
+                    Выполнение условий <strong>@k @GetPeriodDisplayName(Model.Input!.Period, k)</strong> из <strong>@n</strong> с шансом 
+                    <strong>@Model.Percent.ToString("F3")%</strong>
+                    @(Model.ByAverage ? $" (по средним значениям за {Model.SpanForAverageHours}ч)" : "")
                 </div>
             </div>
 
@@ -87,13 +79,13 @@ string GetPeriodDisplayName(TimePeriod? period, int count)
                 <div style="flex:1 1 200px;">
                     <label style="display:block; margin-bottom:6px;">С даты</label>
                     <input type="date" name="Input.FromDate" class="form-input"
-                           value="@Model.Input?.FromDate?.ToString("yyyy-MM-dd")" style="width:100%;" />
+                           value="@fromDate.ToString("yyyy-MM-dd")" style="width:100%;" />
                 </div>
 
                 <div style="flex:1 1 200px;">
                     <label style="display:block; margin-bottom:6px;">По дату</label>
                     <input type="date" name="Input.ToDate" class="form-input"
-                           value="@Model.Input?.ToDate?.ToString("yyyy-MM-dd")" style="width:100%;" />
+                           value="@toDate.ToString("yyyy-MM-dd")" style="width:100%;" />
                 </div>
             </div>
 
@@ -120,6 +112,8 @@ string GetPeriodDisplayName(TimePeriod? period, int count)
                                 var displayName = member.GetCustomAttribute<DisplayAttribute>()?.Name ?? period.ToString();
                                 var intValue = (int)period;
                                 var selected = Model.Input?.Period == period;
+                                
+                                if (Model.Input?.Period is null && intValue == 24) selected = true;
                                 <option value="@intValue" selected="@(selected)">@displayName</option>
                             }
                         }
@@ -130,8 +124,7 @@ string GetPeriodDisplayName(TimePeriod? period, int count)
             
             <input type="hidden" id="amountSuccessHours" name="Input.AmountSuccess"/>
             <input type="hidden" id="numberOfTrialsHours" name="Input.NumberOfTrials"/>
-
-
+            
             <h3 style="margin:8px 0; margin-top: 20px;">Числовые параметры</h3>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 @foreach (var p in numericProps)
@@ -151,10 +144,10 @@ string GetPeriodDisplayName(TimePeriod? period, int count)
                         <input type="number" step="any" name="Input.NumericRanges[@p.Name].To" placeholder="До" class="form-input" value="@toVal" style="width:100%;"/>
                     </div>
                 </div>
-                }
+                }   
             </div>
 
-            <h3 style="margin:16px 0 8px 0;">Типовые параметры</h3>
+            <h3 style="margin:16px 0 8px 0;">Специальные параметры</h3>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 @foreach (var p in enumProps)
                 {

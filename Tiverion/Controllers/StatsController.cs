@@ -1,12 +1,9 @@
-using System.Numerics;
 using System.Reflection;
 using System.Security.Claims;
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Tiverion.Data.Context;
 using Tiverion.Models.Entities.Dto;
-using Tiverion.Models.Entities.Enums;
 using Tiverion.Models.Entities.ServiceEntities;
 using Tiverion.Models.Entities.ServiceEntities.Weather;
 using Tiverion.Models.Platform;
@@ -50,9 +47,16 @@ public class StatsController : Controller
         // );
 
         // return View("Tasks", model);
+
+        int lastDays = 7;
+        var now = DateTime.UtcNow;
+        
+        var fromDate = (now.Year > 1 || now.Month > 1 || now.Day > lastDays)  ? now.AddDays(-7) : new DateTime(1, 1, 1);
         var model = new StatsViewModel
         {
-            WeatherStamps = _cache.WeatherStamps
+            WeatherStamps = await _cache.WeatherStamps
+                .Where(w => w.Timestamp >= fromDate)
+                .ToListAsync()
         };
         return View(model);
     }
@@ -77,7 +81,13 @@ public class StatsController : Controller
         if (input is null)
         {
             TempData["Error"] = "Данные не заполнены!";
-            return RedirectToAction("Analysis");
+            return View(analysisDto);
+        }
+
+        if (input.AmountSuccess > input.NumberOfTrials)
+        {
+            TempData["Error"] = "Ожидаемое число совпадений не может превышать число испытаний!";
+            return View(analysisDto);
         }
         
         var query = _cache.WeatherStamps
@@ -143,7 +153,13 @@ public class StatsController : Controller
 
 
         analysisDto.Percent = stamps.Count == 0 ? 0 : (countMatching * 100.0 / stamps.Count);
-        int n = analysisDto.Input.NumberOfTrials / (int) analysisDto.Input.Period;
+        if ((int)analysisDto.Percent == 100 && analysisDto.Input!.AmountSuccess == analysisDto.Input.NumberOfTrials)
+        {
+            analysisDto.ResultPercent = 100;
+            return View(analysisDto);
+        }
+        
+        int n = analysisDto.Input!.NumberOfTrials / (int) analysisDto.Input.Period;
         int k = analysisDto.Input.AmountSuccess / (int) analysisDto.Input.Period;
         
         double resultPercent = -1;
@@ -238,10 +254,6 @@ public class StatsController : Controller
 
         return result;
     }
-
-
-
-
 
 
     
