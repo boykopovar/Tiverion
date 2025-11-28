@@ -29,3 +29,26 @@ public class NumericRange
     public double? From { get; set; }
     public double? To { get; set; }
 }
+
+
+public class GeometricAnalysisDto
+{
+    public WeatherConditionRangeDto? Input { get; set; }
+    public bool ByAverage { get; set; } = true;
+    public int SpanForAverageHours { get; set; } = 24;
+    public int K { get; set; } = 1;
+    public string Param { get; set; } = "trials";
+    public GeometricResult? Result { get; set; }
+}
+
+public class GeometricResult
+{
+    public double P { get; set; }
+    public double ETrials { get; set; }
+    public double EFailures { get; set; }
+    public double MeanHours { get; set; }
+    public double PEqualsK { get; set; }
+    public double PLessEqK { get; set; }
+    public int CountIntervals { get; set; }
+    public int SumIntervals { get; set; }
+}

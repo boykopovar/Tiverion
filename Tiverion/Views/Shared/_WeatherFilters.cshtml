@@ -1,0 +1,191 @@
+@using System.Reflection
+@using System.ComponentModel
+@using Tiverion.Models.Entities.Enums
+@using Tiverion.Models.Entities.ServiceEntities.Weather
+
+@model Tiverion.Models.ViewModels.Stats.WeatherFiltersViewModel
+
+@*
+Подключается строкой:
+<partial name="_TaskManageTable" model = "tableModel"/>
+*@
+
+@{
+    var numericProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.PropertyType.IsValueType && !p.PropertyType.IsEnum)
+        .ToArray();
+
+    var enumProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.PropertyType.IsEnum)
+        .ToArray();
+
+    string GetDisplayName(PropertyInfo p) =>
+        p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
+    
+    var defaultTo = DateTime.UtcNow;
+    
+    var monthAgo = DateTime.Today.AddMonths(-1);
+    if (monthAgo < DateTime.MinValue.Date)
+        monthAgo = DateTime.MinValue.Date;
+
+    var fromDate = Model.Input?.FromDate ?? monthAgo;
+    var toDate   = Model.Input?.ToDate   ?? defaultTo;
+}
+
+<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
+    <div style="flex:1 1 200px;">
+        <label style="display:block; margin-bottom:6px;">С даты</label>
+        <input type="date" name="Input.FromDate" class="form-input"
+               value="@fromDate.ToString("yyyy-MM-dd")" style="width:100%;" />
+    </div>
+
+    <div style="flex:1 1 200px;">
+        <label style="display:block; margin-bottom:6px;">По дату</label>
+        <input type="date" name="Input.ToDate" class="form-input"
+               value="@toDate.ToString("yyyy-MM-dd")" style="width:100%;" />
+    </div>
+</div>
+
+
+<input type="hidden" id="amountSuccessHours" name="Input.AmountSuccess"/>
+<input type="hidden" id="numberOfTrialsHours" name="Input.NumberOfTrials"/>
+
+<h3 style="margin:8px 0; margin-top: 20px;">Числовые параметры</h3>
+<div style="display:flex; flex-direction:column; gap:10px;">
+    @foreach (var p in numericProps)
+    {
+    var displayName = GetDisplayName(p);
+    var fromVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].From?.ToString() : "";
+    var toVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].To?.ToString() : "";
+
+    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+        <div style="flex:0 1 auto; min-width:300px;">
+            <label style="display:block; margin-bottom:6px;">@displayName</label>
+        </div>
+        <div style="flex:1 1 200px; min-width:300px;">
+            <input type="number" step="any" name="Input.NumericRanges[@p.Name].From" placeholder="От" class="form-input" value="@fromVal" style="width:100%;"/>
+        </div>
+        <div style="flex:1 1 200px; min-width:300px;">
+            <input type="number" step="any" name="Input.NumericRanges[@p.Name].To" placeholder="До" class="form-input" value="@toVal" style="width:100%;"/>
+        </div>
+    </div>
+    }
+</div>
+
+<h3 style="margin:16px 0 8px 0;">Специальные параметры</h3>
+<div style="display:flex; flex-direction:column; gap:10px;">
+    @foreach (var p in enumProps)
+    {
+    var displayName = GetDisplayName(p);
+    var selectedFrom = Model.Input?.EnumRanges != null && Model.Input.EnumRanges.ContainsKey(p.Name) ? Model.Input.EnumRanges[p.Name].From : null;
+    var selectedTo = Model.Input?.EnumRanges != null && Model.Input.EnumRanges.ContainsKey(p.Name) ? Model.Input.EnumRanges[p.Name].To : null;
+
+    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+        <div style="flex:1 1 200px; min-width:300px;">
+            <label style="display:block; margin-bottom:6px;">@displayName</label>
+        </div>
+        <div style="flex:1 1 200px; min-width:300px;">
+            <select name="Input.EnumRanges[@p.Name].From" class="form-select" style="width:100%;">
+                <option value="">Не выбрано</option>
+                @foreach (var val in Enum.GetValues(p.PropertyType))
+                {
+                var intVal = Convert.ToInt32(val);
+                var enumVal = (Enum)val;
+                var text = enumVal.GetDisplayName();
+                if (selectedFrom == intVal)
+                {
+                <option value="@intVal" selected="selected">@text</option>
+                }
+                else
+                {
+                <option value="@intVal">@text</option>
+                }
+                }
+            </select>
+        </div>
+        <div style="flex:1 1 200px; min-width:300px;">
+            <select name="Input.EnumRanges[@p.Name].To" class="form-select" style="width:100%;">
+                <option value="">Не выбрано</option>
+                @foreach (var val in Enum.GetValues(p.PropertyType))
+                {
+                var intVal = Convert.ToInt32(val);
+                var enumVal = (Enum)val;
+                var text = enumVal.GetDisplayName();
+                if (selectedTo == intVal)
+                {
+                <option value="@intVal" selected="selected">@text</option>
+                }
+                else
+                {
+                <option value="@intVal">@text</option>
+                }
+                }
+            </select>
+        </div>
+    </div>
+    }
+</div>
+
+<h3 style="margin:16px 0 8px 0;">Средние значения</h3>
+<div style="display:flex; flex-direction:column; gap:10px;">
+    <div style="display:flex; align-items:center; gap:6px;">
+        @Html.CheckBoxFor(m => m.ByAverage, new { @id = "byAvgCheckbox" })
+        <label for="byAvgCheckbox" style="margin:0;">Использовать усреднённые значения</label>
+    </div>
+
+    <div id="avgBlock">
+        <label style="display:block; margin-top:6px; margin-bottom:6px;">Период усреднения (часов)</label>
+        <input type="number" min="1" max="168" name="SpanForAverageHours" class="form-input" value="@Model.SpanForAverageHours" style="width:200px;" />
+    </div>
+</div>
+
+<input type="hidden" id="selectedTrialValue" name="Input.SelectedTrialValue" />
+
+<script>
+    const byAvgCheckbox = document.getElementById("byAvgCheckbox");
+    const avgBlock = document.getElementById("avgBlock");
+
+    avgBlock.style.display = byAvgCheckbox.checked ? "" : "none";
+
+    byAvgCheckbox.addEventListener("change", function() {
+        avgBlock.style.display = this.checked ? "" : "none";
+    });
+
+    function convertToHours() {
+        const periodDropdown = document.getElementById('periodDropdown');
+        const numberOfTrialsUnit = document.getElementById('numberOfTrialsUnit');
+        const amountSuccessUnit = document.getElementById('amountSuccessUnit');
+        const amountSuccessHours = document.getElementById('amountSuccessHours');
+        const numberOfTrialsHours = document.getElementById('numberOfTrialsHours');
+
+        const selectedPeriod = parseInt(periodDropdown.value);
+        
+        const trialsInHours = (parseInt(numberOfTrialsUnit.value) || 0) * selectedPeriod;
+        const successInHours = (parseInt(amountSuccessUnit.value) || 0) * selectedPeriod;
+        
+        numberOfTrialsHours.value = trialsInHours;
+        amountSuccessHours.value = successInHours;
+        
+        console.log('Trials in hours:', trialsInHours, 'Success in hours:', successInHours);
+        
+        return true;
+    }
+    
+    function updateDisplay() {
+        const periodDropdown = document.getElementById('periodDropdown');
+        const numberOfTrialsUnit = document.getElementById('numberOfTrialsUnit');
+        const amountSuccessUnit = document.getElementById('amountSuccessUnit');
+
+        const selectedPeriod = parseInt(periodDropdown.value);
+        let trialsInHours, successInHours;
+        
+        trialsInHours = (parseInt(numberOfTrialsUnit.value) || 0) * selectedPeriod;
+        successInHours = (parseInt(amountSuccessUnit.value) || 0) * selectedPeriod;
+        
+        console.log('Current values in hours:', trialsInHours, successInHours);
+    }
+    
+    document.getElementById('periodDropdown').addEventListener('change', updateDisplay);
+    document.getElementById('numberOfTrialsUnit').addEventListener('input', updateDisplay);
+    document.getElementById('amountSuccessUnit').addEventListener('input', updateDisplay);
+</script>

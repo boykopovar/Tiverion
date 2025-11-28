@@ -172,6 +172,127 @@ public class StatsController : Controller
         
         return View(analysisDto);
     }
+    
+    
+    public async Task<IActionResult> Geometric()
+    {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+        
+        return View(new GeometricAnalysisDto());
+    }
+    
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Geometric(GeometricAnalysisDto dto)
+    {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+        var input = dto.Input;
+        if (input is null)
+        {
+            TempData["Error"] = "Данные не заполнены!";
+            return View(dto);
+        }
+
+        var query = _cache.WeatherStamps.AsQueryable();
+        if (input.FromDate.HasValue) query = query.Where(w => w.Timestamp >= input.FromDate.Value);
+        if (input.ToDate.HasValue) query = query.Where(w => w.Timestamp <= input.ToDate.Value);
+
+        var properties = (input.NumericRanges?.Keys ?? Enumerable.Empty<string>())
+            .Concat(input.EnumRanges?.Keys ?? Enumerable.Empty<string>())
+            .Select(k => typeof(CurrentWeather).GetProperty(k))
+            .Where(p => p is not null)
+            .Select(p => p!)
+            .ToList();
+
+        if (!properties.Any()) return View(dto);
+
+        List<WeatherStamp> stamps;
+        if (dto.ByAverage)
+            stamps = await _GetAverageByInterval(query, properties, dto.SpanForAverageHours);
+        else
+            stamps = await query.ToListAsync();
+
+        stamps = stamps.OrderBy(s => s.Timestamp).ToList();
+
+        bool IsSuccess(WeatherStamp w)
+        {
+            foreach (var prop in properties)
+            {
+                var name = prop.Name;
+                if (input.NumericRanges != null && input.NumericRanges.TryGetValue(name, out var numericRange))
+                {
+                    var raw = prop.GetValue(w);
+                    if (raw == null) return false;
+                    var val = Convert.ToDouble(raw);
+                    if (numericRange.From.HasValue && val < numericRange.From.Value ||
+                        numericRange.To.HasValue && val > numericRange.To.Value) return false;
+                }
+
+                if (input.EnumRanges != null && input.EnumRanges.TryGetValue(name, out var enumRange))
+                {
+                    var raw = prop.GetValue(w);
+                    if (raw == null) return false;
+                    var val = Convert.ToInt32(raw);
+                    if (enumRange.From.HasValue && val < enumRange.From.Value ||
+                        enumRange.To.HasValue && val > enumRange.To.Value) return false;
+                }
+            }
+            return true;
+        }
+
+        var intervals = new List<int>();
+        int counter = 0;
+        foreach (var s in stamps)
+        {
+            counter++;
+            if (IsSuccess(s))
+            {
+                intervals.Add(counter);
+                counter = 0;
+            }
+        }
+
+        int countIntervals = intervals.Count;
+        int sumIntervals = intervals.Sum();
+        double p = 0;
+        double eTrials = 0;
+        double eFailures = 0;
+        if (countIntervals > 0 && sumIntervals > 0)
+        {
+            p = (double)countIntervals / sumIntervals;
+            eTrials = 1.0 / p;
+            eFailures = eTrials - 1.0;
+        }
+
+        int k = Math.Max(1, dto.K);
+        double pEqK = 0;
+        double pLeK = 0;
+        if (p > 0)
+        {
+            pEqK = Math.Pow(1 - p, k - 1) * p;
+            pLeK = 1 - Math.Pow(1 - p, k);
+        }
+
+        int stepHours = (int)input.Period;
+        double meanHours = eTrials * stepHours;
+
+        dto.Result = new GeometricResult
+        {
+            P = p * 100.0,
+            ETrials = eTrials,
+            EFailures = eFailures,
+            MeanHours = meanHours,
+            PEqualsK = pEqK * 100.0,
+            PLessEqK = pLeK * 100.0,
+            CountIntervals = countIntervals,
+            SumIntervals = sumIntervals
+        };
+
+        return View(dto);
+    }
+
 
     private double CalculateBinomialProbability(int n, int k, double percent)
     {

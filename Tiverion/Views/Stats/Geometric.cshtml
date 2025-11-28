@@ -1,0 +1,111 @@
+@using System.Reflection
+@using System.ComponentModel.DataAnnotations
+@using Tiverion.Models.Entities.Enums
+@using Tiverion.Models.ViewModels.Stats
+@model Tiverion.Models.ViewModels.Stats.GeometricAnalysisDto
+
+@{
+Layout = "_Layout";
+ViewData["Title"] = "Геометрическое распределение";
+
+string GetPeriodDisplayName(TimePeriod period, int count)
+{
+var attribute = period.GetAttribute<CountForm>();
+if (attribute is null) return period.GetDisplayName();
+return ((CountForm)attribute).GetWordForm(count);
+}
+}
+
+<section class="dashboard">
+    <partial name="_TopNav" />
+    <div class="dashboard-inner">
+
+        <h1 class="title">Геометрическое распределение</h1>
+        <p class="subtitle">Время до первого наступления указанного события.</p>
+
+        <partial name="_ShowTempData"/>
+
+        @if (Model.Result != null)
+        {
+        var geom = Model.Result;
+        <div class="card" style="margin:16px 0; padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="font-weight:800; font-size:28px; color:var(--color-card-highlight);">
+                    P (шаг) = @geom.P.ToString("F3") %
+                </div>
+                <div style="color:var(--color-card-subtext); font-size:14px;">
+                    Среднее шагов до события: <strong>@geom.ETrials.ToString("F3")</strong> (шагов) — ≈ <strong>@geom.MeanHours.ToString("F2")</strong> часов
+                </div>
+            </div>
+
+            <div style="text-align:right; color:var(--color-card-subtext); font-size:13px;">
+                P(T = k) = @geom.PEqualsK.ToString("F3") %<br />
+                P(T ≤ k) = @geom.PLessEqK.ToString("F3") %<br />
+                Наблюдений: @geom.CountIntervals
+            </div>
+        </div>
+        }
+
+        <form asp-action="Geometric" method="post" class="auth-panel" style="width:100%; max-width:1200px; box-sizing:border-box; padding:20px; display:block;">
+            @Html.AntiForgeryToken()
+
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
+                <div style="flex:1 1 200px;">
+                    <label style="display:block; margin-bottom:6px;">С даты</label>
+                    <input type="date" name="Input.FromDate" class="form-input" value="@(Model.Input?.FromDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd"))" style="width:100%;" />
+                </div>
+
+                <div style="flex:1 1 200px;">
+                    <label style="display:block; margin-bottom:6px;">По дату</label>
+                    <input type="date" name="Input.ToDate" class="form-input" value="@(Model.Input?.ToDate?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"))" style="width:100%;" />
+                </div>
+
+                <div style="flex:1 1 200px;">
+                    <label style="display:block; margin-bottom:6px;">Единица шага</label>
+                    <select id="periodDropdown" name="Input.Period" class="form-select" style="width:100%;">
+                        @{
+                        foreach (TimePeriod period in Enum.GetValues(typeof(TimePeriod)))
+                        {
+                        var member = typeof(TimePeriod).GetMember(period.ToString()).First();
+                        var displayName = member.GetCustomAttribute<DisplayAttribute>()?.Name ?? period.ToString();
+                        var intValue = (int)period;
+                        var selected = Model.Input?.Period == period;
+                        if (Model.Input?.Period is null && intValue == 24) selected = true;
+                        <option value="@intValue" selected="@(selected)">@displayName</option>
+                        }
+                        }
+                    </select>
+                </div>
+            </div>
+
+            @{
+            var filters = new WeatherFiltersViewModel()
+            {
+            Input = Model.Input,
+            ByAverage = Model.ByAverage,
+            SpanForAverageHours = Model.SpanForAverageHours
+            };
+            }
+            <partial name="_WeatherFilters" model="filters"/>
+
+            <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+                <div style="flex:0 1 200px;">
+                    <label style="display:block; margin-bottom:6px;">k (шаги)</label>
+                    <input type="number" name="K" id="kInput" min="1" value="@(Model.K)" class="form-input" style="width:120px;" />
+                </div>
+                <div style="flex:1 1 auto;">
+                    <label style="display:block; margin-bottom:6px;">Параметризация</label>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <label style="font-size:13px;"><input type="radio" name="Param" value="trials" @(Model.Param == "trials" ? "checked" : "") /> trials (T ≥ 1)</label>
+                        <label style="font-size:13px;"><input type="radio" name="Param" value="failures" @(Model.Param == "failures" ? "checked" : "") /> failures (F ≥ 0)</label>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px;">
+                <a class="btn outline" href="@Url.Action("Geometric", "Stats")">Сброс</a>
+                <button type="submit" class="btn primary">Посчитать</button>
+            </div>
+        </form>
+    </div>
+</section>
