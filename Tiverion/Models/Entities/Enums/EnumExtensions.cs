@@ -12,6 +12,12 @@ public static class EnumExtensions
         return attr?.Name ?? value.ToString();
     }
 
+    public static Attribute? GetAttribute<T>(this Enum value) where T : Attribute
+    {
+        var field = value.GetType().GetField(value.ToString());
+        return field?.GetCustomAttribute<T>();
+    }
+
     public static string GetDisplayName(PropertyInfo field)
     {
         var name = field.GetCustomAttribute<DisplayAttribute>();

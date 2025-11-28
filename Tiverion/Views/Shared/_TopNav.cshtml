@@ -30,7 +30,7 @@
         {
             var title = kv.Key;
             var url = kv.Value;
-            var isActive = string.Equals(currentPath, url, StringComparison.OrdinalIgnoreCase);
+            var isActive = currentPath.StartsWith(url);
 
             if ((url == PlatformSettings.Urls.LoginPage || url == PlatformSettings.Urls.RegisterPage) 
                 && isAuth)

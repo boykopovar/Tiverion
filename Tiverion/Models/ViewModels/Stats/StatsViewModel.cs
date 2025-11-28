@@ -6,5 +6,5 @@ namespace Tiverion.Models.ViewModels.Stats;
 
 public class StatsViewModel
 {
-    public required DbSet<WeatherStamp> WeatherStamps { get; set; }
+    public required List<WeatherStamp> WeatherStamps { get; set; }
 }
