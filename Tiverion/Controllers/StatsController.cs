@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Tiverion.Data.Context;
@@ -171,6 +172,123 @@ public class StatsController : Controller
         analysisDto.ResultPercent = resultPercent;
         
         return View(analysisDto);
+    }
+    
+    
+    public async Task<IActionResult> Geo()
+    {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+        
+        return View(new GeometricAnalysisDto());
+    }
+    
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Geo(GeometricAnalysisDto dto)
+    {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+
+        var input = dto.Input;
+        if (input == null)
+        {
+            TempData["Error"] = "Не указаны условия события.";
+            return View(dto);
+        }
+
+        var query = _cache.WeatherStamps.AsQueryable();
+        if (input.FromDate.HasValue) query = query.Where(w => w.Timestamp >= input.FromDate.Value);
+        if (input.ToDate.HasValue) query = query.Where(w => w.Timestamp <= input.ToDate.Value.AddDays(1).AddSeconds(-1));
+
+        var properties = (input.NumericRanges?.Keys ?? Enumerable.Empty<string>())
+            .Concat(input.EnumRanges?.Keys ?? Enumerable.Empty<string>())
+            .Select(k => typeof(CurrentWeather).GetProperty(k))
+            .Where(p => p != null)
+            .Select(p => p!)
+            .ToList();
+
+        if (!properties.Any())
+        {
+            TempData["Error"] = "Не выбрано ни одного условия.";
+            return View(dto);
+        }
+
+        List<WeatherStamp> stamps = dto.ByAverage
+            ? await _GetAverageByInterval(query, properties, dto.SpanForAverageHours)
+            : await query.ToListAsync();
+
+        stamps = stamps.OrderBy(s => s.Timestamp).ToList();
+
+        bool IsSuccess(WeatherStamp w)
+        {
+            foreach (var prop in properties)
+            {
+                var name = prop.Name;
+                var raw = prop.GetValue(w);
+                if (raw == null) return false;
+
+                if (input.NumericRanges != null && input.NumericRanges.TryGetValue(name, out var nr))
+                {
+                    double val = Convert.ToDouble(raw);
+                    if (nr.From.HasValue && val < nr.From.Value) return false;
+                    if (nr.To.HasValue && val > nr.To.Value) return false;
+                }
+
+                if (input.EnumRanges != null && input.EnumRanges.TryGetValue(name, out var er))
+                {
+                    int val = Convert.ToInt32(raw);
+                    if (er.From.HasValue && val < er.From.Value) return false;
+                    if (er.To.HasValue && val > er.To.Value) return false;
+                }
+            }
+            return true;
+        }
+
+        var intervals = new List<int>();
+        int counter = 0;
+        foreach (var s in stamps)
+        {
+            counter++;
+            if (IsSuccess(s))
+            {
+                intervals.Add(counter);
+                counter = 0;
+            }
+        }
+
+        if (intervals.Count == 0)
+        {
+            TempData["Success"] = "За выбранный период событие ни разу не произошло.";
+            return View(dto);
+        }
+
+        int successCount = intervals.Count;
+        int totalSteps = intervals.Sum();
+        double p = (double)successCount / totalSteps;
+
+        double expectedTrials = 1.0 / p;
+        double expectedFailures = expectedTrials - 1.0;
+
+        int k = Math.Max(1, dto.NumberOfSteps);
+        double probExactly = Math.Pow(1 - p, k - 1) * p;
+        double probWithin = 1 - Math.Pow(1 - p, k);
+
+        int stepHours = (int)input.Period;
+        double expectedHours = expectedTrials * stepHours;
+
+        dto.Result = new GeometricResult
+        {
+            SuccessProbabilityPercent = p * 100.0,
+            ExpectedTrials = expectedTrials,
+            ExpectedFailures = expectedFailures,
+            ExpectedHours = expectedHours,
+            ProbabilityExactlyAtK = probExactly * 100.0,
+            ProbabilityWithinK = probWithin * 100.0,
+            TotalIntervals = totalSteps,
+            SuccessCount = successCount
+        };
+        return View(dto);
     }
 
     private double CalculateBinomialProbability(int n, int k, double percent)

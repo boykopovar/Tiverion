@@ -1,0 +1,120 @@
+@using Tiverion.Models.Entities.Enums
+@using Tiverion.Models.ViewModels.Stats
+@model Tiverion.Models.ViewModels.Stats.GeometricAnalysisDto
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Геометрическое распределение";
+
+    string GetPeriodDisplayName(TimePeriod period, int count)
+    {
+        var attribute = period.GetAttribute<CountForm>();
+        if (attribute is null) return period.GetDisplayName();
+        return ((CountForm)attribute).GetWordForm(count);
+    }
+
+    var defaultPeriod = Enum.GetValues(typeof(TimePeriod))
+        .Cast<TimePeriod>()
+        .OrderBy(x => (int)x)
+        .First();
+
+    var actualPeriod = Model.Input?.Period ?? defaultPeriod;
+    var periodForDisplay = Model.Result != null ? actualPeriod : defaultPeriod;
+}
+
+<section class="dashboard">
+    <partial name="_TopNav" />
+    <div class="dashboard-inner">
+
+        <h1 class="title">Геометрическое распределение</h1>
+        <p class="subtitle">Сколько в среднем нужно ждать первого наступления события и с какой вероятностью оно случится в ближайшие N шагов.</p>
+
+        <partial name="_ShowTempData"/>
+
+        @if (Model.Result != null)
+        {
+            var r = Model.Result;
+            var currentPeriod = Model.Input?.Period;
+            int stepHours = currentPeriod.HasValue ? (int)currentPeriod.Value : 24;
+
+            <div class="card">
+                <div class="highlight" style="font-size:28px; font-weight:800; margin-bottom:8px;">
+                    p = @r.SuccessProbabilityPercent.ToString("F3") % за один шаг (@stepHours ч)
+                </div>
+
+                <p style="margin:12px 0 24px; color:var(--color-card-subtext);">
+                    Проанализировано @r.TotalIntervals
+                    шаг@(r.TotalIntervals % 10 == 1 && r.TotalIntervals % 100 != 11 ? "" : "ов"),
+                    событие произошло
+                    @(r.SuccessCount == 0
+                    ? "ни разу"
+                    : $"{r.SuccessCount} {GetPeriodDisplayName(periodForDisplay, r.SuccessCount)}").
+                </p>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:20px; margin-bottom:24px;">
+
+                    <div style="background:rgba(36,165,91,0.06); padding:20px; border-radius:12px; border:1px solid rgba(36,165,91,0.15);">
+                        <h3 style="margin:0 0 12px; color:var(--color-card-highlight); font-size:16px; font-weight:600;">
+                            Количество попыток до первого успеха (Y ≥ 1)
+                        </h3>
+                        <div style="font-size:19px; line-height:1.7;">
+                            В среднем: <strong>@r.ExpectedTrials.ToString("F2")</strong> шаг@(r.ExpectedTrials > 1.5 ? "ов" : "")<br>
+                            ≈ <strong>@r.ExpectedHours.ToString("F1")</strong> часов
+                        </div>
+                    </div>
+
+                    <div style="background:rgba(36,165,91,0.04); padding:20px; border-radius:12px; border:1px solid rgba(36,165,91,0.1);">
+                        <h3 style="margin:0 0 12px; color:var(--color-subtitle-text); font-size:16px; font-weight:600;">
+                            Количество неудач до первого успеха (X ≥ 0)
+                        </h3>
+                        <div style="font-size:19px; line-height:1.7;">
+                            В среднем: <strong>@r.ExpectedFailures.ToString("F2")</strong> шаг@(r.ExpectedFailures > 1.5 ? "ов" : "")<br>
+                            ≈ <strong>@((r.ExpectedFailures * stepHours).ToString("F1"))</strong> часов
+                        </div>
+                    </div>
+                </div>
+
+                <div style="padding-top:20px; border-top:1px solid var(--color-card-border); color:var(--color-card-subtext); font-size:15px;">
+                    <strong>Для ближайших @Model.NumberOfSteps шаг@(Model.NumberOfSteps % 10 == 1 && Model.NumberOfSteps % 100 != 11 ? "а" : "ов"):</strong>
+                    <br><br>
+                    • Вероятность, что событие случится <strong>ровно на @Model.NumberOfSteps-м шаге</strong>:<br>
+                    <span class="highlight">@r.ProbabilityExactlyAtK.ToString("F3") %</span>
+                    <br><br>
+                    • Вероятность, что событие случится <strong>в течение этих @Model.NumberOfSteps шагов</strong>:<br>
+                    <span class="highlight">@r.ProbabilityWithinK.ToString("F3") %</span>
+                </div>
+            </div>
+        }
+
+        <form asp-action="Geo" method="post" cclass="auth-panel" style="width:100%; max-width:1200px; box-sizing:border-box; padding:20px; display:block;">
+            @Html.AntiForgeryToken()
+
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <div style="flex:0 1 auto; min-width:300px; margin-bottom: 6px">
+                    <label style="display:block; margin-bottom:6px;">Рассчитать вероятности для ближайших N шагов</label>
+                </div>
+                <div style="flex:1 1 200px; min-width:300px;">
+                    <input type="number" name="NumberOfSteps" min="1" value="@Model.NumberOfSteps" placeholder="Число шагов" class="form-input" style="width:100%;"/>
+                </div>
+            </div>
+            
+            @{
+            var filters = new WeatherFiltersViewModel
+            {
+                Input = Model.Input,
+                ByAverage = Model.ByAverage,
+                SpanForAverageHours = Model.SpanForAverageHours
+            };
+            }
+            
+            <partial name="_WeatherFilters" model="filters"/>
+
+            <div style="margin-top:20px; display:flex; gap:16px; align-items:end; flex-wrap:wrap;">
+                <div style="margin-left:auto; display:flex; gap:12px;">
+                    <a asp-action="Geo" class="btn outline">Сбросить</a>
+                    <button type="submit" class="btn primary">Рассчитать</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>

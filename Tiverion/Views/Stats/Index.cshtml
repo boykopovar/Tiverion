@@ -50,15 +50,19 @@ var dynamicWeatherData = weatherList.Select(w =>
 
 var chartCfg = new {
     type = "line",
-    labels = dynamicWeatherData.Select(d => d.ContainsKey(timestampKey) ? d[timestampKey]?.ToString() : null).ToList(),
+    labels = dynamicWeatherData
+        .Select(d => d.ContainsKey(timestampKey) ? d[timestampKey]?.ToString() : null)
+        .ToList(),
     datasets = new[] {
         new {
             label = metricOptions.FirstOrDefault()?.display,
-            data = dynamicWeatherData.Select(d => {
-                var firstMetric = metricOptions.FirstOrDefault()?.key;
-                if (firstMetric == null) return 0d;
-                var v = d.ContainsKey(firstMetric) ? d[firstMetric] : 0;
-                try { return Convert.ToDouble(v ?? 0); } catch { return 0d; }
+            data = dynamicWeatherData
+                .Select(d => {
+                    var firstMetric = metricOptions
+                        .FirstOrDefault()?.key;
+                    if (firstMetric == null) return 0d;
+                    var v = d.ContainsKey(firstMetric) ? d[firstMetric] : 0;
+                    try { return Convert.ToDouble(v ?? 0); } catch { return 0d; }
             }).ToList(),
             fill = false,
             tension = 0.2,
@@ -77,6 +81,7 @@ var chartCfg = new {
         <div class="actions" style="margin-bottom: 1.5rem;">
             <a class="btn primary" style = "margin-bottom: 4px;" href="@Url.Action("Tasks", "Stats")">Список задач</a>
             <a class="btn primary" style = "margin-bottom: 4px;" href="@Url.Action("Analysis", "Stats")">Анализ</a>
+            <a class="btn primary" style = "margin-bottom: 4px;" href="@Url.Action("Geo", "Stats")">Распределение</a>
         </div>
         <div style="margin-top: 1.5rem;">
             <h2 class="title">График погоды</h2>
