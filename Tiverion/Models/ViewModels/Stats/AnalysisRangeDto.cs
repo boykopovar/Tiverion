@@ -36,19 +36,20 @@ public class GeometricAnalysisDto
     public WeatherConditionRangeDto? Input { get; set; }
     public bool ByAverage { get; set; } = true;
     public int SpanForAverageHours { get; set; } = 24;
-    public int K { get; set; } = 1;
-    public string Param { get; set; } = "trials";
+    
+    public int NumberOfSteps { get; set; } = 10;
+
     public GeometricResult? Result { get; set; }
 }
 
 public class GeometricResult
 {
-    public double P { get; set; }
-    public double ETrials { get; set; }
-    public double EFailures { get; set; }
-    public double MeanHours { get; set; }
-    public double PEqualsK { get; set; }
-    public double PLessEqK { get; set; }
-    public int CountIntervals { get; set; }
-    public int SumIntervals { get; set; }
+    public double SuccessProbabilityPercent { get; set; }  // p × 100
+    public double ExpectedTrials { get; set; }   // 1/p  (смещённое, T ≥ 1)
+    public double ExpectedFailures { get; set; } // (1-p)/p
+    public double ExpectedHours { get; set; }   // ExpectedTrials × шаг в часах
+    public double ProbabilityExactlyAtK { get; set; } // P(T = k) × 100
+    public double ProbabilityWithinK { get; set; } // P(T ≤ k) × 100
+    public int TotalIntervals { get; set; }
+    public int SuccessCount { get; set; }
 }
