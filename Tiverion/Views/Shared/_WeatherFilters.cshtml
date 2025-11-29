@@ -51,21 +51,21 @@
 <div style="display:flex; flex-direction:column; gap:10px;">
     @foreach (var p in numericProps)
     {
-    var displayName = GetDisplayName(p);
-    var fromVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].From?.ToString() : "";
-    var toVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].To?.ToString() : "";
+        var displayName = GetDisplayName(p);
+        var fromVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].From?.ToString() : "";
+        var toVal = Model.Input?.NumericRanges != null && Model.Input.NumericRanges.ContainsKey(p.Name) ? Model.Input.NumericRanges[p.Name].To?.ToString() : "";
 
-    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-        <div style="flex:0 1 auto; min-width:300px;">
-            <label style="display:block; margin-bottom:6px;">@displayName</label>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+            <div style="flex:0 1 auto; min-width:300px;">
+                <label style="display:block; margin-bottom:6px;">@displayName</label>
+            </div>
+            <div style="flex:1 1 200px; min-width:300px;">
+                <input type="number" step="any" name="Input.NumericRanges[@p.Name].From" placeholder="От" class="form-input" value="@fromVal" style="width:100%;"/>
+            </div>
+            <div style="flex:1 1 200px; min-width:300px;">
+                <input type="number" step="any" name="Input.NumericRanges[@p.Name].To" placeholder="До" class="form-input" value="@toVal" style="width:100%;"/>
+            </div>
         </div>
-        <div style="flex:1 1 200px; min-width:300px;">
-            <input type="number" step="any" name="Input.NumericRanges[@p.Name].From" placeholder="От" class="form-input" value="@fromVal" style="width:100%;"/>
-        </div>
-        <div style="flex:1 1 200px; min-width:300px;">
-            <input type="number" step="any" name="Input.NumericRanges[@p.Name].To" placeholder="До" class="form-input" value="@toVal" style="width:100%;"/>
-        </div>
-    </div>
     }
 </div>
 
@@ -86,17 +86,17 @@
                 <option value="">Не выбрано</option>
                 @foreach (var val in Enum.GetValues(p.PropertyType))
                 {
-                var intVal = Convert.ToInt32(val);
-                var enumVal = (Enum)val;
-                var text = enumVal.GetDisplayName();
-                if (selectedFrom == intVal)
-                {
-                <option value="@intVal" selected="selected">@text</option>
-                }
-                else
-                {
-                <option value="@intVal">@text</option>
-                }
+                    var intVal = Convert.ToInt32(val);
+                    var enumVal = (Enum)val;
+                    var text = enumVal.GetDisplayName();
+                    if (selectedFrom == intVal)
+                    {
+                        <option value="@intVal" selected="selected">@text</option>
+                    }
+                    else
+                    {
+                        <option value="@intVal">@text</option>
+                    }
                 }
             </select>
         </div>
@@ -105,17 +105,17 @@
                 <option value="">Не выбрано</option>
                 @foreach (var val in Enum.GetValues(p.PropertyType))
                 {
-                var intVal = Convert.ToInt32(val);
-                var enumVal = (Enum)val;
-                var text = enumVal.GetDisplayName();
-                if (selectedTo == intVal)
-                {
-                <option value="@intVal" selected="selected">@text</option>
-                }
-                else
-                {
-                <option value="@intVal">@text</option>
-                }
+                    var intVal = Convert.ToInt32(val);
+                    var enumVal = (Enum)val;
+                    var text = enumVal.GetDisplayName();
+                    if (selectedTo == intVal)
+                    {
+                        <option value="@intVal" selected="selected">@text</option>
+                    }
+                    else
+                    {
+                        <option value="@intVal">@text</option>
+                    }
                 }
             </select>
         </div>

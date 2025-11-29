@@ -50,15 +50,19 @@ var dynamicWeatherData = weatherList.Select(w =>
 
 var chartCfg = new {
     type = "line",
-    labels = dynamicWeatherData.Select(d => d.ContainsKey(timestampKey) ? d[timestampKey]?.ToString() : null).ToList(),
+    labels = dynamicWeatherData
+        .Select(d => d.ContainsKey(timestampKey) ? d[timestampKey]?.ToString() : null)
+        .ToList(),
     datasets = new[] {
         new {
             label = metricOptions.FirstOrDefault()?.display,
-            data = dynamicWeatherData.Select(d => {
-                var firstMetric = metricOptions.FirstOrDefault()?.key;
-                if (firstMetric == null) return 0d;
-                var v = d.ContainsKey(firstMetric) ? d[firstMetric] : 0;
-                try { return Convert.ToDouble(v ?? 0); } catch { return 0d; }
+            data = dynamicWeatherData
+                .Select(d => {
+                    var firstMetric = metricOptions
+                        .FirstOrDefault()?.key;
+                    if (firstMetric == null) return 0d;
+                    var v = d.ContainsKey(firstMetric) ? d[firstMetric] : 0;
+                    try { return Convert.ToDouble(v ?? 0); } catch { return 0d; }
             }).ToList(),
             fill = false,
             tension = 0.2,
