@@ -1,0 +1,216 @@
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+@using Tiverion.Models.ViewModels
+@using Tiverion.Models.ViewModels.Stats
+@using System.ComponentModel
+@using System.ComponentModel.DataAnnotations
+@using System.Reflection
+@using Tiverion.Models.Entities.Enums
+@using Tiverion.Models.Entities.ServiceEntities.Weather
+@model Tiverion.Models.ViewModels.Stats.DependencyAnalysisDto
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Зависимости";
+    
+    var dateModel = new DatePeriodViewModel
+    {
+        StartDate = Model.Input?.FromDate,
+        EndDate = Model.Input?.ToDate
+    };
+
+    int minConfidencePercent = 51;
+    int maxConditionParameters = 2;
+    int stepSizeHours = 6;
+    int minDeltaPercent = 30;
+
+    string GetPropertyDisplay(string propName)
+    {
+        var pi = typeof(CurrentWeather).GetProperty(propName);
+        if (pi == null) return propName;
+        var dn = pi.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName;
+        if (!string.IsNullOrEmpty(dn)) return dn;
+        var d = pi.GetCustomAttribute<DisplayAttribute>()?.Name;
+        if (!string.IsNullOrEmpty(d)) return d;
+        return propName;
+    }
+
+    string GetEnumValueDisplay(string paramName, object? rawValue)
+    {
+        if (rawValue == null) return rawValue?.ToString() ?? "";
+        var pi = typeof(CurrentWeather).GetProperty(paramName);
+        if (pi == null) return rawValue.ToString() ?? "";
+        var enumType = pi.PropertyType;
+        if (!enumType.IsEnum) return rawValue.ToString() ?? "";
+        try
+        {
+            object enumObj;
+            if (rawValue.GetType() == enumType) enumObj = rawValue;
+            else enumObj = Enum.ToObject(enumType, Convert.ToInt32(rawValue));
+            if (enumObj is Enum e)
+            {
+                return e.GetDisplayName();
+            }
+            return enumObj.ToString() ?? "";
+        }
+        catch
+        {
+            return rawValue.ToString() ?? "";
+        }
+    }
+
+    object? GetValueProp(object dto)
+    {
+        var p = dto.GetType().GetProperty("Value");
+        return p?.GetValue(dto);
+    }
+
+    var rules = Model.Results
+        .OrderByDescending(r => r.ConfidencePercent)
+        .ThenByDescending(r => r.SupportPercent)
+        .ThenByDescending(r => r.SupportCount)
+        .ThenByDescending(r => r.Lift);
+}
+
+<section class="dashboard">
+    <partial name="_TopNav" />
+    <div class="dashboard-inner">
+
+        <h1 class="title">Анализ зависимостей</h1>
+        <p class="subtitle">Автоматический поиск вероятностных зависимостей между погодными параметрами.</p>
+
+        <partial name="_ShowTempData"/>
+
+        <form asp-action="Dependency" method="post" class="auth-panel" style="width:100%; max-width:1200px; box-sizing:border-box; padding:20px; display:block;">
+            @Html.AntiForgeryToken()
+
+            <partial name="_DatePeriod" model="dateModel"/>
+
+            <div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:12px;">
+                <div style="flex:1 1 150px;">
+                    <label>Порог уверенности (%)</label>
+                    <input type="number" name="Input.MinConfidencePercent" min="1" max="100" step="1" class="form-input"
+                           value="@(Model.Input?.MinConfidencePercent ?? minConfidencePercent)" />
+                </div>
+
+                <div style="flex:1 1 150px;">
+                    <label>Макс. параметров в условии</label>
+                    <input type="number" name="Input.MaxConditionParameters" min="1" max="5" step="1" class="form-input"
+                           value="@(Model.Input?.MaxConditionParameters ?? maxConditionParameters)" />
+                </div>
+
+                <div style="flex:1 1 150px;">
+                    <label>Мин. изменение (%)</label>
+                    <input type="number" name="Input.MinDeltaPercent" min="1" max="100" step="1" class="form-input"
+                           value="@(Model.Input?.MinDeltaPercent ?? minDeltaPercent)" />
+                </div>
+
+                <div style="flex:1 1 150px;">
+                    <label>Шаг времени (часы)</label>
+                    <input type="number" name="Input.StepSizeHours" min="1" max="24" step="1" class="form-input"
+                           value="@(Model.Input?.StepSizeHours ?? stepSizeHours)" />
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px;">
+                <button type="submit" class="btn primary">Запустить анализ</button>
+            </div>
+        </form>
+
+        @if (Model.Results.Any())
+        {
+            <h2 style="margin-top:24px; display:flex; align-items:center; gap:8px;">
+                Найденные зависимости
+
+                <span class="help-tooltip">
+                    ?
+                    <span class="help-tooltip-content">
+                        <b>Условия</b> — параметры, изменение которых наблюдалось.<br><br>
+
+                        <b>Исход</b> — параметр, изменение которого происходило после условий.<br><br>
+
+                        <b>Уверенность</b> — вероятность исхода <b>при выполнении условий</b>.<br>
+                        Формула: SupportCount / Количество случаев с условиями.<br><br>
+
+                        <b>Поддержка</b> — доля всех наблюдений, где правило сработало.<br><br>
+
+                        <b>Lift</b> — насколько исход чаще происходит при условиях,
+                        чем в среднем по данным.<br>
+                        &gt; 1 — полезная зависимость.<br>
+                        ≈ 1 — случайно.<br><br>
+
+                        <b>SupportCount</b> — количество фактических срабатываний правила.
+                    </span>
+                </span>
+            </h2>
+
+            <table class="responsive-table">
+                <thead>
+                <tr>
+                    <th>Условия</th>
+                    <th>Исход</th>
+                    <th>Уверенность (%)</th>
+                    <th>Поддержка (%)</th>
+                    <th>Lift</th>
+                    <th>SupportCount</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var r in rules)
+                {
+                    <tr>
+                        <td>
+                            @foreach (var c in r.Conditions)
+                            {
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span>@GetPropertyDisplay(c.Parameter)</span>
+                                    @if (c.Operator == DependencyOperator.Greater)
+                                    {
+                                        <span style="color:green;">▲ @(c.ValuePercent.ToString("F2"))%</span>
+                                    }
+                                    else if (c.Operator == DependencyOperator.Less)
+                                    {
+                                        <span style="color:red;">▼ @(c.ValuePercent.ToString("F2"))%</span>
+                                    }
+                                    else
+                                    {
+                                        var rawVal = GetValueProp(c);
+                                        var enumDisplay = GetEnumValueDisplay(c.Parameter, rawVal);
+                                        <span style="color:royalblue;">→ @enumDisplay</span>
+                                    }
+                                </div>
+                            }
+                        </td>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span>@GetPropertyDisplay(r.Outcome.Parameter)</span>
+                                @if (r.Outcome.Operator == DependencyOperator.Greater)
+                                {
+                                    <span style="color:green;">▲ @(r.Outcome.ValuePercent.ToString("F2"))%</span>
+                                }
+                                else if (r.Outcome.Operator == DependencyOperator.Less)
+                                {
+                                    <span style="color:red;">▼ @(r.Outcome.ValuePercent.ToString("F2"))%</span>
+                                }
+                                else
+                                {
+                                    var rawOut = GetValueProp(r.Outcome);
+                                    var enumOutDisplay = GetEnumValueDisplay(r.Outcome.Parameter, rawOut);
+                                    <span style="color:royalblue;">→ @enumOutDisplay</span>
+                                }
+                                @* @if(r.Outcome.TimeOffsetHours.HasValue) *@
+                                @* { *@
+                                @*     <span style="color:#666;">через @r.Outcome.TimeOffsetHours ч</span> *@
+                                @* } *@
+                            </div>
+                        </td>
+                        <td>@r.ConfidencePercent.ToString("F2")</td>
+                        <td>@r.SupportPercent.ToString("F2")</td>
+                        <td>@r.Lift.ToString("F2")</td>
+                        <td>@r.SupportCount</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</section>

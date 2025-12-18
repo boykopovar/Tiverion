@@ -1,0 +1,29 @@
+@*
+Подключается строкой:
+<partial name="_DatePeriod"/>
+*@
+@model Tiverion.Models.ViewModels.DatePeriodViewModel?
+@{
+    var defaultTo = DateTime.UtcNow;
+    
+    var monthAgo = DateTime.Today.AddMonths(-1);
+    if (monthAgo < DateTime.MinValue.Date)
+        monthAgo = DateTime.MinValue.Date;
+
+    var fromDate = Model?.StartDate ?? monthAgo;
+    var toDate   = Model?.EndDate ?? defaultTo;
+}
+
+<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
+    <div style="flex:1 1 200px;">
+        <label style="display:block; margin-bottom:6px;">С даты</label>
+        <input type="date" name="Input.FromDate" class="form-input"
+               value="@fromDate.ToString("yyyy-MM-dd")" style="width:100%;" />
+    </div>
+
+    <div style="flex:1 1 200px;">
+        <label style="display:block; margin-bottom:6px;">По дату</label>
+        <input type="date" name="Input.ToDate" class="form-input"
+               value="@toDate.ToString("yyyy-MM-dd")" style="width:100%;" />
+    </div>
+</div>
