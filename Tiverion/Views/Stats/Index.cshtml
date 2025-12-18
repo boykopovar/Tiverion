@@ -2,26 +2,47 @@
 @using System.Linq
 @using System.Reflection
 @using System.ComponentModel
+@using System.ComponentModel.DataAnnotations
 @using Tiverion.Models.Entities.ServiceEntities.Weather
 @model Tiverion.Models.ViewModels.Stats.StatsViewModel
+
+@functions {
+    private string EnumDisplayName(object? value)
+    {
+        if (value == null) return "";
+        var type = value.GetType();
+        if (!type.IsEnum) return value.ToString() ?? "";
+        var fi = type.GetField(value.ToString() ?? "");
+        var attr = fi?.GetCustomAttribute<DisplayAttribute>();
+        return attr?.Name ?? value.ToString() ?? "";
+    }
+}
 
 @{
 Layout = "_Layout";
 ViewData["Title"] = "Статистика погоды";
 
-
-var weatherList = Model.WeatherStamps?.ToList() ?? new List<WeatherStamp>();
+var weatherList = Model.WeatherStamps.ToList() ?? new List<WeatherStamp>();
 
 var templateProps = typeof(CurrentWeather).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-    .Where(p => p.PropertyType.IsValueType || p.PropertyType == typeof(string))
+    .Where(p => p.PropertyType.IsValueType || p.PropertyType == typeof(string) || p.PropertyType.IsEnum)
     .ToArray();
 
 var templateNames = templateProps.Select(p => p.Name).ToHashSet();
 var displayMap = templateProps.ToDictionary(p => p.Name, p => p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name);
+
 var metricOptions = templateProps.Select(p => new {
     key = p.Name,
     display = displayMap[p.Name],
-    type = p.PropertyType.IsEnum ? "enum" : (p.PropertyType == typeof(string) ? "string" : "numeric")
+    type = p.PropertyType.IsEnum ? "enum" : (p.PropertyType == typeof(string) ? "string" : "numeric"),
+    enumOptions = p.PropertyType.IsEnum
+        ? Enum.GetValues(p.PropertyType)
+            .Cast<object>()
+            .Select(ev => new {
+                value = ev.ToString(),
+                display = (ev.GetType().GetField(ev.ToString() ?? "")?.GetCustomAttribute<DisplayAttribute>()?.Name) ?? ev.ToString()
+            }).ToArray()
+        : null
 }).ToList();
 
 var timestampProp = typeof(WeatherStamp).GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -36,7 +57,7 @@ var dynamicWeatherData = weatherList.Select(w =>
         var pi = w.GetType().GetProperty(name);
         if (pi == null) continue;
         var val = pi.GetValue(w);
-        if (val != null && val.GetType().IsEnum) dict[name] = val.ToString();
+        if (val != null && val.GetType().IsEnum) dict[name] = EnumDisplayName(val);
         else dict[name] = val;
     }
     if (!string.IsNullOrEmpty(timestampKey))
@@ -58,8 +79,7 @@ var chartCfg = new {
             label = metricOptions.FirstOrDefault()?.display,
             data = dynamicWeatherData
                 .Select(d => {
-                    var firstMetric = metricOptions
-                        .FirstOrDefault()?.key;
+                    var firstMetric = metricOptions.FirstOrDefault()?.key;
                     if (firstMetric == null) return 0d;
                     var v = d.ContainsKey(firstMetric) ? d[firstMetric] : 0;
                     try { return Convert.ToDouble(v ?? 0); } catch { return 0d; }
@@ -79,9 +99,9 @@ var chartCfg = new {
         <h1 class="title">Статистика погоды</h1>
         <p class="subtitle">Просматривайте данные погоды и их динамику.</p>
         <div class="actions" style="margin-bottom: 1.5rem;">
-            <a class="btn primary" style = "margin-bottom: 4px;" href="@Url.Action("Tasks", "Stats")">Список задач</a>
-            <a class="btn primary" style = "margin-bottom: 4px;" href="@Url.Action("Analysis", "Stats")">Анализ</a>
-            <a class="btn primary" style = "margin-bottom: 4px;" href="@Url.Action("Geo", "Stats")">Распределение</a>
+            <a class="btn primary" style="margin-bottom: 4px;" href="@Url.Action("Tasks", "Stats")">Список задач</a>
+            <a class="btn primary" style="margin-bottom: 4px;" href="@Url.Action("Analysis", "Stats")">Анализ</a>
+            <a class="btn primary" style="margin-bottom: 4px;" href="@Url.Action("Geo", "Stats")">Распределение</a>
         </div>
         <div style="margin-top: 1.5rem;">
             <h2 class="title">График погоды</h2>
@@ -162,6 +182,70 @@ window.__timestampKey = @Html.Raw(JsonSerializer.Serialize(timestampKey));
         return d;
     }
 
+    function groupBuckets(data, tsKey) {
+        const g = new Map();
+        data.forEach(w => {
+            const dt = parseDate(w[tsKey]);
+            if (!dt) return;
+            let key;
+            if (groupBy.value === 'hour') key = String(dt.getHours()).padStart(2,'0') + ':00';
+            else if (groupBy.value === 'weekday') key = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][dt.getDay()];
+            else key = dt.toISOString().slice(0,10);
+            const arr = g.get(key) || [];
+            arr.push(w);
+            g.set(key, arr);
+        });
+        return { labels: Array.from(g.keys()), map: g };
+    }
+
+    function getMetricMeta(key) {
+        const opts = window.__metricOptions || [];
+        return opts.find(o => o.key === key) || opts[0] || { key: null, display: null, type: 'numeric', enumOptions: null };
+    }
+
+    function buildEnumTimeSeries(metricKey, meta) {
+        const data = window.__weatherData || [];
+        const tsKey = window.__timestampKey || null;
+        if (!tsKey) return { labels: [], values: [], categories: [] };
+        const grouped = groupBuckets(data, tsKey);
+        const labels = grouped.labels;
+        let categories = [];
+        if (meta && meta.enumOptions && Array.isArray(meta.enumOptions)) {
+            categories = meta.enumOptions.map(e => e.display);
+        } else {
+            const set = new Set();
+            data.forEach(w => {
+                const v = w[metricKey];
+                if (v !== null && v !== undefined) set.add(String(v));
+            });
+            categories = Array.from(set);
+        }
+        const indexOf = (v) => {
+            if (v === null || v === undefined) return null;
+            const s = String(v);
+            const idx = categories.indexOf(s);
+            return idx >= 0 ? idx : null;
+        };
+        const values = labels.map(l => {
+            const arr = grouped.map.get(l) || [];
+            if (!arr || arr.length === 0) return null;
+            const counts = new Map();
+            arr.forEach(item => {
+                const v = item[metricKey];
+                const s = (v === null || v === undefined) ? null : String(v);
+                counts.set(s, (counts.get(s) || 0) + 1);
+            });
+            let best = null;
+            let bestCount = -1;
+            counts.forEach((cnt, key) => {
+                if (cnt > bestCount) { best = key; bestCount = cnt; }
+            });
+            return best === null ? null : indexOf(best);
+        });
+        console.log('enum/time-series', { metricKey, labels, categories, values });
+        return { labels, values, categories };
+    }
+
     function groupDataForMetric(metricKey) {
         const data = window.__weatherData || [];
         const tsKey = window.__timestampKey || null;
@@ -188,79 +272,105 @@ window.__timestampKey = @Html.Raw(JsonSerializer.Serialize(timestampKey));
                 const n = (v === null || v === undefined) ? NaN : Number(v);
                 if (!isNaN(n)) { sum += n; cnt++; }
             });
-            return cnt === 0 ? 0 : +(sum / cnt).toFixed(2);
+            return cnt === 0 ? null : +(sum / cnt).toFixed(2);
         });
         return { labels, values };
-    }
-
-    function buildPieForMetric(metricKey, metricType) {
-        const data = window.__weatherData || [];
-        if (metricType === 'enum' || metricType === 'string') {
-            const counts = new Map();
-            data.forEach(w => {
-                const v = w[metricKey];
-                const label = v === null || v === undefined ? 'null' : String(v);
-                counts.set(label, (counts.get(label) || 0) + 1);
-            });
-            const labels = Array.from(counts.keys());
-            const values = labels.map(l => counts.get(l));
-            return { labels, values };
-        } else {
-            let nums = data.map(w => {
-                const v = w[metricKey];
-                const n = (v === null || v === undefined) ? NaN : Number(v);
-                return isNaN(n) ? null : n;
-            }).filter(x => x !== null);
-            if (nums.length === 0) return { labels: [], values: [] };
-            const min = Math.min(...nums);
-            const max = Math.max(...nums);
-            const buckets = 5;
-            const range = Math.max(1e-9, max - min);
-            const bucketCounts = new Array(buckets).fill(0);
-            const labels = new Array(buckets).fill(0).map((_,i) => {
-                const from = (min + (i * range / buckets));
-                const to = (i === buckets-1) ? max : (min + ((i+1) * range / buckets));
-                return `${from.toFixed(1)}–${to.toFixed(1)}`;
-            });
-            nums.forEach(n => {
-                const idx = Math.min(buckets - 1, Math.floor(((n - min) / range) * buckets));
-                bucketCounts[Math.max(0, idx)]++;
-            });
-            return { labels, values: bucketCounts };
-        }
-    }
-
-    function getMetricMeta(key) {
-        const opts = window.__metricOptions || [];
-        return opts.find(o => o.key === key) || opts[0] || { key: null, display: null, type: 'numeric' };
     }
 
     function rebuildConfig() {
         const metricKey = metric.value;
         const meta = getMetricMeta(metricKey);
         if (chartTypeEl.value === 'pie') {
-            const pie = buildPieForMetric(metricKey, meta.type);
-            const bg = pie.labels.map((_,i) => palette[i % palette.length]);
-            return {
-                type: 'pie',
-                data: { labels: pie.labels, datasets: [{ label: meta.display || metricKey, data: pie.values, backgroundColor: bg }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            };
+            if (meta.type === 'enum' || meta.type === 'string') {
+                const data = window.__weatherData || [];
+                const counts = new Map();
+                data.forEach(w => {
+                    const v = w[metricKey];
+                    const label = v === null || v === undefined ? 'null' : String(v);
+                    counts.set(label, (counts.get(label) || 0) + 1);
+                });
+                const labels = Array.from(counts.keys());
+                const values = labels.map(l => counts.get(l));
+                const bg = labels.map((_,i) => palette[i % palette.length]);
+                const cfg = {
+                    type: 'pie',
+                    data: { labels, datasets: [{ label: meta.display || metricKey, data: values, backgroundColor: bg }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                };
+                console.log('enum/pie data', { labels, values });
+                return cfg;
+            } else {
+                const grouped = groupDataForMetric(metricKey);
+                const labels = grouped.labels;
+                const values = grouped.values;
+                const bg = labels.map((_,i) => palette[i % palette.length]);
+                const cfg = {
+                    type: 'pie',
+                    data: { labels, datasets: [{ label: meta.display || metricKey, data: values, backgroundColor: bg }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                };
+                console.log('numeric/pie data', { labels, values });
+                return cfg;
+            }
         } else {
-            const grouped = groupDataForMetric(metricKey);
-            const metricIndex = (window.__metricOptions || []).findIndex(o => o.key === metricKey);
-            const color = palette[(metricIndex >= 0 ? metricIndex : 0) % palette.length];
-            return {
-                type: chartTypeEl.value,
-                data: { labels: grouped.labels, datasets: [{ label: meta.display || metricKey, data: grouped.values, borderColor: color, backgroundColor: color, fill: false, tension: 0.2, pointRadius: 3 }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            };
+            if (meta.type === 'enum' || meta.type === 'string') {
+                const ts = buildEnumTimeSeries(metricKey, meta);
+                const dataObj = {
+                    labels: ts.labels,
+                    datasets: [{
+                        label: meta.display || metricKey,
+                        data: ts.values,
+                        borderColor: palette[0],
+                        backgroundColor: palette[0],
+                        spanGaps: false,
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 3
+                    }]
+                };
+                const nCats = ts.categories.length;
+                const cfg = {
+                    type: chartTypeEl.value,
+                    data: dataObj,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                min: -0.5,
+                                max: Math.max(0, nCats - 0.5),
+                                ticks: {
+                                    stepSize: 1,
+                                    callback: function(value) {
+                                        const idx = Math.round(value);
+                                        return (idx >= 0 && idx < ts.categories.length) ? ts.categories[idx] : '';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+                console.log('rebuildConfig (enum numeric-mapped)', { labels: ts.labels, values: ts.values, categories: ts.categories });
+                return cfg;
+            } else {
+                const grouped = groupDataForMetric(metricKey);
+                const metricIndex = (window.__metricOptions || []).findIndex(o => o.key === metricKey);
+                const color = palette[(metricIndex >= 0 ? metricIndex : 0) % palette.length];
+                const cfg = {
+                    type: chartTypeEl.value,
+                    data: { labels: grouped.labels, datasets: [{ label: meta.display || metricKey, data: grouped.values, borderColor: color, backgroundColor: color, fill: false, tension: 0.2, pointRadius: 3 }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                };
+                console.log('rebuildConfig (numeric)', cfg.data);
+                return cfg;
+            }
         }
     }
 
     updateBtn.addEventListener('click', () => {
         const cfg = rebuildConfig();
-        if ((cfg.data.labels && cfg.data.labels.length > 0) || (cfg.data.datasets && cfg.data.datasets[0].data && cfg.data.datasets[0].data.length > 0)) {
+        if ((cfg.data.labels && cfg.data.labels.length > 0) || (cfg.data.datasets && cfg.data.datasets[0] && cfg.data.datasets[0].data && cfg.data.datasets[0].data.length > 0)) {
             noDataEl.style.display = 'none';
             buildChart(cfg);
         } else {
