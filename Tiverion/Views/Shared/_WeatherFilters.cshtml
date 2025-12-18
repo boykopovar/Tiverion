@@ -2,6 +2,7 @@
 @using System.ComponentModel
 @using Tiverion.Models.Entities.Enums
 @using Tiverion.Models.Entities.ServiceEntities.Weather
+@using Tiverion.Models.ViewModels
 
 @model Tiverion.Models.ViewModels.Stats.WeatherFiltersViewModel
 
@@ -21,31 +22,14 @@
 
     string GetDisplayName(PropertyInfo p) =>
         p.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? p.Name;
-    
-    var defaultTo = DateTime.UtcNow;
-    
-    var monthAgo = DateTime.Today.AddMonths(-1);
-    if (monthAgo < DateTime.MinValue.Date)
-        monthAgo = DateTime.MinValue.Date;
 
-    var fromDate = Model.Input?.FromDate ?? monthAgo;
-    var toDate   = Model.Input?.ToDate   ?? defaultTo;
+    var dateModel = new DatePeriodViewModel
+    {
+        StartDate = Model.Input?.FromDate,
+        EndDate = Model.Input?.ToDate
+    };
 }
-
-<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
-    <div style="flex:1 1 200px;">
-        <label style="display:block; margin-bottom:6px;">С даты</label>
-        <input type="date" name="Input.FromDate" class="form-input"
-               value="@fromDate.ToString("yyyy-MM-dd")" style="width:100%;" />
-    </div>
-
-    <div style="flex:1 1 200px;">
-        <label style="display:block; margin-bottom:6px;">По дату</label>
-        <input type="date" name="Input.ToDate" class="form-input"
-               value="@toDate.ToString("yyyy-MM-dd")" style="width:100%;" />
-    </div>
-</div>
-
+<partial name="_DatePeriod" model="dateModel"/>
 
 <h3 style="margin:8px 0; margin-top: 20px;">Числовые параметры</h3>
 <div style="display:flex; flex-direction:column; gap:10px;">

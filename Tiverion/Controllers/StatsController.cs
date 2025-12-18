@@ -61,8 +61,6 @@ public class StatsController : Controller
         };
         return View(model);
     }
-    
-    
     public async Task<IActionResult> Analysis()
     {
         var actionAndUser = await ConfirmUser(User);
@@ -70,7 +68,59 @@ public class StatsController : Controller
         
         return View(new AnalysisRangeDto());
     }
+    public async Task<IActionResult> Dependency()
+    {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+        
+        return View(new DependencyAnalysisDto());
+    }
+    public async Task<IActionResult> Geo()
+    {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+        
+        return View(new GeometricAnalysisDto());
+    }
+    
+    
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Dependency(DependencyAnalysisDto dto)
+    {
+        var actionAndUser = await ConfirmUser(User);
+        if (actionAndUser.action is not null) return actionAndUser.action;
+        
+        if (dto.Input is null)
+        {
+            TempData["Error"] = "Не заполнены параметры анализа.";
+            return View(dto);
+        }
+        Console.WriteLine(JsonSerializer.Serialize(dto));
 
+        var query = _cache.WeatherStamps.AsQueryable();
+
+        if (dto.Input.FromDate.HasValue) query = query.Where(w => w.Timestamp >= dto.Input.FromDate);
+        if (dto.Input.ToDate.HasValue) query = query.Where(w => w.Timestamp <= dto.Input.ToDate);
+
+        var stamps = await query
+            .OrderBy(w => w.Timestamp)
+            .ToListAsync();
+        if (!stamps.Any())
+        {
+            TempData["Error"] = "Нет данных за выбранный период.";
+            return View(dto);
+        }
+
+        dto.Results = FindDependencies(
+            stamps,
+            dto.Input.MaxConditionParameters,
+            dto.Input.MinConfidencePercent,
+            dto.Input.StepSizeHours,
+            dto.Input.MinDeltaPercent);
+        return View(dto);
+    }
+    
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Analysis(AnalysisRangeDto analysisDto)
@@ -174,13 +224,67 @@ public class StatsController : Controller
         return View(analysisDto);
     }
     
-    
-    public async Task<IActionResult> Geo()
+    public async Task<List<WeatherStamp>> _GetAverageByInterval(
+        IQueryable<WeatherStamp> query,
+        List<PropertyInfo> properties,
+        int spanHours = 24)
     {
-        var actionAndUser = await ConfirmUser(User);
-        if (actionAndUser.action is not null) return actionAndUser.action;
+        var list = await query.ToListAsync();
+        var result = new List<WeatherStamp>();
+
+        if (!list.Any())
+            return result;
+
+        list = list
+            .OrderBy(s => s.Timestamp)
+            .ToList();
         
-        return View(new GeometricAnalysisDto());
+        var start = list.First().Timestamp;
+        var end = list.Last().Timestamp;
+
+        for (var intervalStart = start; intervalStart <= end; intervalStart = intervalStart.AddHours(spanHours))
+        {
+            var intervalEnd = intervalStart.AddHours(spanHours);
+            var intervalGroup = list
+                .Where(w => w.Timestamp >= intervalStart && w.Timestamp < intervalEnd)
+                .ToList();
+
+            if (!intervalGroup.Any())
+                continue;
+
+            var avgStamp = new WeatherStamp();
+            avgStamp.Timestamp = intervalStart;
+
+            foreach (var prop in properties)
+            {
+                if (prop.PropertyType.IsEnum)
+                {
+                    var values = intervalGroup.Select(w => (int)prop.GetValue(w)!).ToList();
+                    if (values.Any())
+                    {
+                        var mode = values
+                            .GroupBy(v => v)
+                            .OrderByDescending(g => g.Count())
+                            .First().Key;
+
+                        prop.SetValue(avgStamp, Enum.ToObject(prop.PropertyType, mode));
+                    }
+                }
+                else
+                {
+                    var values = intervalGroup
+                        .Select(w => Convert.ToDouble(prop.GetValue(w)))
+                        .ToList();
+
+                    if (values.Any())
+                        prop.SetValue(avgStamp, Convert.ChangeType(values.Average(), prop.PropertyType));
+                }
+            }
+
+            result.Add(avgStamp);
+        }
+
+        return result;
     }
     
     [HttpPost]
@@ -310,68 +414,250 @@ public class StatsController : Controller
         return 0;
     }
 
-    public async Task<List<WeatherStamp>> _GetAverageByInterval(
-        IQueryable<WeatherStamp> query,
-        List<PropertyInfo> properties,
-        int spanHours = 24)
+    
+
+    
+    private static IEnumerable<List<T>> _Combinations<T>(List<T> list, int length)
     {
-        var list = await query.ToListAsync();
-        var result = new List<WeatherStamp>();
-
-        if (!list.Any())
-            return result;
-
-        list = list
-            .OrderBy(s => s.Timestamp)
-            .ToList();
-        
-        var start = list.First().Timestamp;
-        var end = list.Last().Timestamp;
-
-        for (var intervalStart = start; intervalStart <= end; intervalStart = intervalStart.AddHours(spanHours))
+        if (length == 0)
         {
-            var intervalEnd = intervalStart.AddHours(spanHours);
-            var intervalGroup = list
-                .Where(w => w.Timestamp >= intervalStart && w.Timestamp < intervalEnd)
-                .ToList();
-
-            if (!intervalGroup.Any())
-                continue;
-
-            var avgStamp = new WeatherStamp();
-            avgStamp.Timestamp = intervalStart;
-
-            foreach (var prop in properties)
-            {
-                if (prop.PropertyType.IsEnum)
-                {
-                    var values = intervalGroup.Select(w => (int)prop.GetValue(w)!).ToList();
-                    if (values.Any())
-                    {
-                        var mode = values
-                            .GroupBy(v => v)
-                            .OrderByDescending(g => g.Count())
-                            .First().Key;
-
-                        prop.SetValue(avgStamp, Enum.ToObject(prop.PropertyType, mode));
-                    }
-                }
-                else
-                {
-                    var values = intervalGroup
-                        .Select(w => Convert.ToDouble(prop.GetValue(w)))
-                        .ToList();
-
-                    if (values.Any())
-                        prop.SetValue(avgStamp, Convert.ChangeType(values.Average(), prop.PropertyType));
-                }
-            }
-
-            result.Add(avgStamp);
+            yield return new List<T>();
+            yield break;
         }
 
-        return result;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var head = list[i];
+            var tail = list.Skip(i + 1).ToList();
+            foreach (var tailCombo in _Combinations(tail, length - 1))
+            {
+                var combo = new List<T> { head };
+                combo.AddRange(tailCombo);
+                yield return combo;
+            }
+        }
     }
+    
+
+    
+    private List<DependencyRule> FindDependencies(
+        List<WeatherStamp> stamps,
+        int maxConditionParameters,
+        double minConfidencePercent,
+        int stepSizeHours,
+        int minDeltaPercent)
+    {
+        List<DependencyRule> results = new();
+        var properties = typeof(CurrentWeather).GetProperties()
+            .Where(p => p.PropertyType.IsValueType || p.PropertyType.IsEnum)
+            .ToList();
+        int n = stamps.Count;
+        if (n == 0) return results;
+
+        var paramValues = new Dictionary<string, List<(DateTime ts, double value, object raw, bool isEnum)>>();
+        foreach (var prop in properties)
+        {
+            bool isEnum = prop.PropertyType.IsEnum;
+            var list = stamps.Select(s =>
+            {
+                var raw = prop.GetValue(s);
+                double val = 0.0;
+                try { val = Convert.ToDouble(raw ?? 0.0); } catch { val = 0.0; }
+                return (s.Timestamp, val, raw, isEnum);
+            }).ToList();
+            paramValues[prop.Name] = list;
+        }
+
+        double MaxPercentCap = 1000.0;
+        var baselines = new Dictionary<string, double>();
+        foreach (var prop in properties)
+        {
+            var arr = paramValues[prop.Name].Select(x => Math.Abs(x.value)).Where(v => !double.IsNaN(v)).OrderBy(v => v).ToArray();
+            double baseline;
+            if (arr.Length == 0) baseline = 1.0;
+            else
+            {
+                int m = arr.Length / 2;
+                baseline = (arr.Length % 2 == 1) ? arr[m] : ((arr[m - 1] + arr[m]) / 2.0);
+                if (baseline < 0.01) baseline = 0.01;
+            }
+            baselines[prop.Name] = baseline;
+        }
+
+        for (int r = 1; r <= maxConditionParameters; r++)
+        {
+            var combos = _Combinations(properties, r);
+            foreach (var combo in combos)
+            {
+                var comboSet = new HashSet<PropertyInfo>(combo);
+                foreach (var outcomeProp in properties)
+                {
+                    if (comboSet.Contains(outcomeProp)) continue;
+
+                    int countA = 0;
+                    int supportCount = 0;
+                    double[] condPercentSums = new double[combo.Count];
+                    double[] condDeltaSums = new double[combo.Count];
+                    double outcomePercentSum = 0.0;
+                    double outcomeDeltaSum = 0.0;
+                    int totalB = 0;
+
+                    for (int i = 0; i < n; i++)
+                    {
+                        var startTs = stamps[i].Timestamp;
+                        var endTs = startTs.AddHours(stepSizeHours);
+
+                        bool anyMissing = false;
+                        var curVals = new (double value, object raw, bool isEnum)[combo.Count];
+                        var futVals = new (double value, object raw, bool isEnum)[combo.Count];
+
+                        for (int j = 0; j < combo.Count; j++)
+                        {
+                            var p = combo[j];
+                            var list = paramValues[p.Name];
+                            var cur = list[i];
+                            var fut = list.FirstOrDefault(x => x.ts > cur.ts && x.ts <= endTs);
+                            if (fut.ts == default) { anyMissing = true; break; }
+                            curVals[j] = (cur.value, cur.raw, cur.isEnum);
+                            futVals[j] = (fut.value, fut.raw, fut.isEnum);
+                        }
+                        if (anyMissing) continue;
+
+                        var outcomeList = paramValues[outcomeProp.Name];
+                        var curOut = outcomeList[i];
+                        var futOut = outcomeList.FirstOrDefault(x => x.ts > curOut.ts && x.ts <= endTs);
+                        if (futOut.ts == default) continue;
+
+                        bool conditionsTriggered = true;
+                        for (int j = 0; j < combo.Count; j++)
+                        {
+                            if (curVals[j].isEnum)
+                            {
+                                bool changed = !Equals(curVals[j].raw, futVals[j].raw);
+                                if (!changed) conditionsTriggered = false;
+                            }
+                            else
+                            {
+                                double delta = futVals[j].value - curVals[j].value;
+                                double denom = baselines[combo[j].Name];
+                                double percent = Math.Abs(delta) / denom * 100.0;
+                                if (percent > MaxPercentCap) percent = MaxPercentCap;
+                                if (percent < minDeltaPercent) conditionsTriggered = false;
+                            }
+                        }
+
+                        bool outcomeOccurred;
+                        if (outcomeProp.PropertyType.IsEnum)
+                        {
+                            outcomeOccurred = !Equals(curOut.raw, futOut.raw);
+                            if (outcomeOccurred) totalB++;
+                        }
+                        else
+                        {
+                            double deltaOut = futOut.value - curOut.value;
+                            double denomOut = baselines[outcomeProp.Name];
+                            double outPercent = Math.Abs(deltaOut) / denomOut * 100.0;
+                            if (outPercent > MaxPercentCap) outPercent = MaxPercentCap;
+                            if (outPercent >= minDeltaPercent) { outcomeOccurred = true; totalB++; } else outcomeOccurred = false;
+                        }
+
+                        if (conditionsTriggered)
+                        {
+                            countA++;
+                            for (int j = 0; j < combo.Count; j++)
+                            {
+                                if (curVals[j].isEnum)
+                                {
+                                    condPercentSums[j] += 0.0;
+                                    condDeltaSums[j] += futVals[j].value - curVals[j].value;
+                                }
+                                else
+                                {
+                                    double delta = futVals[j].value - curVals[j].value;
+                                    double denom = baselines[combo[j].Name];
+                                    double percent = Math.Abs(delta) / denom * 100.0;
+                                    if (percent > MaxPercentCap) percent = MaxPercentCap;
+                                    condPercentSums[j] += percent;
+                                    condDeltaSums[j] += delta;
+                                }
+                            }
+
+                            if (outcomeProp.PropertyType.IsEnum)
+                            {
+                                outcomePercentSum += 0.0;
+                                outcomeDeltaSum += futOut.value - curOut.value;
+                            }
+                            else
+                            {
+                                double deltaOut = futOut.value - curOut.value;
+                                double denomOut = baselines[outcomeProp.Name];
+                                double outPercent = Math.Abs(deltaOut) / denomOut * 100.0;
+                                if (outPercent > MaxPercentCap) outPercent = MaxPercentCap;
+                                outcomePercentSum += outPercent;
+                                outcomeDeltaSum += deltaOut;
+                            }
+
+                            if (outcomeOccurred) supportCount++;
+                        }
+                    }
+
+                    if (countA == 0) continue;
+
+                    double confidence = 100.0 * supportCount / countA;
+                    if (confidence < minConfidencePercent) continue;
+
+                    var conditionsDto = new List<DependencyDto>();
+                    for (int j = 0; j < combo.Count; j++)
+                    {
+                        bool isEnum = combo[j].PropertyType.IsEnum;
+                        double avgPercent = Math.Round(condPercentSums[j] / countA, 2);
+                        double avgDelta = condDeltaSums[j] / countA;
+                        DependencyOperator op = isEnum ? DependencyOperator.ChangedTo : (avgDelta > 0 ? DependencyOperator.Greater : DependencyOperator.Less);
+                        conditionsDto.Add(new DependencyDto
+                        {
+                            Parameter = combo[j].Name,
+                            Operator = op,
+                            ValuePercent = avgPercent,
+                            TimeOffsetHours = stepSizeHours
+                        });
+                    }
+
+                    double outcomeAvgPercent = Math.Round(outcomePercentSum / countA, 2);
+                    double outcomeAvgDelta = outcomeDeltaSum / countA;
+                    DependencyOperator outcomeOp = outcomeProp.PropertyType.IsEnum ? DependencyOperator.ChangedTo : (outcomeAvgDelta > 0 ? DependencyOperator.Greater : DependencyOperator.Less);
+
+                    var outcomeDto = new DependencyDto
+                    {
+                        Parameter = outcomeProp.Name,
+                        Operator = outcomeOp,
+                        ValuePercent = outcomeAvgPercent,
+                        TimeOffsetHours = stepSizeHours
+                    };
+
+                    double supportPercent = 100.0 * supportCount / n;
+                    int totalPossibleB = Math.Max(1, n);
+                    double pB = (double)totalB / totalPossibleB;
+                    double pBA = (double)supportCount / Math.Max(1, countA);
+                    double lift = pBA / Math.Max(1e-6, pB);
+
+                    results.Add(new DependencyRule
+                    {
+                        Conditions = conditionsDto,
+                        Outcome = outcomeDto,
+                        ConfidencePercent = Math.Round(confidence, 2),
+                        SupportPercent = Math.Round(supportPercent, 2),
+                        Lift = Math.Round(lift, 2),
+                        SupportCount = supportCount
+                    });
+                }
+            }
+        }
+
+        return results;
+    }
+
+
+
 
 
     
