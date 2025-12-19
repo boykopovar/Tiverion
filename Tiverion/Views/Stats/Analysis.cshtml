@@ -1,20 +1,48 @@
 @using System.Reflection
 @using System.ComponentModel.DataAnnotations
+@using System.Text.Json
+@using System.Text.Json.Serialization
 @using Tiverion.Models.Entities.Enums
 @using Tiverion.Models.ViewModels.Stats
 @model Tiverion.Models.ViewModels.Stats.AnalysisRangeDto
 
 @{
-    Layout = "_Layout";
-    ViewData["Title"] = "Анализ";
+Layout = "_Layout";
+ViewData["Title"] = "Анализ";
 
-    string GetPeriodDisplayName(TimePeriod period, int count)
-    {
-        var attribute = period.GetAttribute<CountForm>();
-        if (attribute is null) return period.GetDisplayName();
+string GetPeriodDisplayName(TimePeriod period, int count)
+{
+var attribute = period.GetAttribute<CountForm>();
+if (attribute is null) return period.GetDisplayName();
 
-        return ((CountForm)attribute).GetWordForm(count);
-    }
+return ((CountForm)attribute).GetWordForm(count);
+}
+
+var userKUnits = 0;
+var userNUnits = 0;
+var hasValidInput = Model.Input != null;
+
+if (hasValidInput)
+{
+userKUnits = Model.Input!.AmountSuccess / (int)Model.Input.Period;
+userNUnits = Model.Input!.NumberOfTrials / (int)Model.Input.Period;
+}
+
+var safeProbabilities = Model.Probabilities?.Select(p =>
+double.IsNaN(p) || double.IsInfinity(p) ? 0.0 : Math.Max(0, p)
+).ToList();
+
+var xAxisLabels = Model.KValues?.ToList() ?? new List<int>();
+
+var maxProbability = safeProbabilities?.DefaultIfEmpty(0).Max() ?? 0;
+var yAxisMax = maxProbability > 0 ? maxProbability * 1.1 : 1;
+
+var userKIndex = Model.KValues?.IndexOf(userKUnits) ?? -1;
+
+var jsonOptions = new JsonSerializerOptions
+{
+NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+};
 }
 
 <section class="dashboard">
@@ -28,16 +56,16 @@
 
         @if (Model.ResultPercent.HasValue && Model.Input != null)
         {
-            var k = Model.Input?.AmountSuccess / (int)(Model.Input!.Period) ?? 0;
-            var n = Model.Input?.NumberOfTrials / (int)(Model.Input!.Period) ?? 0;
-            
+        var k = Model.Input?.AmountSuccess / (int)(Model.Input!.Period) ?? 0;
+        var n = Model.Input?.NumberOfTrials / (int)(Model.Input!.Period) ?? 0;
+
         <div class="card" style="margin:16px 0; padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
             <div style="display:flex; flex-direction:column; gap:6px;">
                 <div style="font-weight:800; font-size:32px; color:var(--color-card-highlight);">
                     @Model.ResultPercent.Value.ToString("F3") %
                 </div>
                 <div style="color:var(--color-card-subtext); font-size:14px;">
-                    Выполнение условий <strong>@k @GetPeriodDisplayName(Model.Input!.Period, k)</strong> из <strong>@n</strong> с шансом 
+                    Выполнение условий <strong>@k @GetPeriodDisplayName(Model.Input!.Period, k)</strong> из <strong>@n</strong> с шансом
                     <strong>@Model.Percent.ToString("F3")%</strong>
                     @(Model.ByAverage ? $" (по средним значениям за {Model.SpanForAverageHours}ч)" : "")
                 </div>
@@ -47,6 +75,38 @@
                 Обработано записей: —
             </div>
         </div>
+
+        @if (safeProbabilities != null && xAxisLabels.Any())
+        {
+        <div class="card" style="margin:16px 0; padding:18px;">
+            <h3 style="margin-bottom: 16px;">График вероятностей</h3>
+            <div style="position: relative; height: 400px;">
+                <canvas id="probabilityChart"></canvas>
+            </div>
+
+            <div id="filterContainer" style="margin-top: 20px; display: none;">
+                <h4 style="margin-bottom: 12px;">Настройка отображения графика</h4>
+                <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <label style="display: block; margin-bottom: 6px; font-size: 14px;">
+                            Показать точки с вероятностью ≥ (в % от максимума):
+                        </label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="range" id="probabilityRange" min="0" max="100" value="100"
+                                   class="form-range" style="flex: 1;">
+                            <input type="number" id="probabilityPercent" min="0" max="100" value="100" step="1"
+                                   class="form-input" style="width: 80px;">
+                            <span style="font-size: 14px; color: var(--color-card-subtext);">%</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="applyFilter" class="btn primary" style="padding: 8px 16px;">Применить</button>
+                        <button id="resetFilter" class="btn outline" style="padding: 8px 16px;">Сбросить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        }
         }
 
         <form asp-action="Analysis" method="post" class="auth-panel" style="width:100%; max-width:1200px; box-sizing:border-box; padding:20px; display:block;" onsubmit="return convertToHours()">
@@ -56,13 +116,15 @@
                 <div style="flex:1 1 200px;">
                     <label style="display:block; margin-bottom:6px;">Кол-во совпадений</label>
                     <input type="number" id="amountSuccessUnit" step="1"
-                           placeholder="k" class="form-input" style="width:100%;" value="@(Model.Input?.AmountSuccess / (int)(Model.Input?.Period ?? TimePeriod.Day))"/>
+                           placeholder="k" class="form-input" style="width:100%;"
+                           value="@(hasValidInput ? userKUnits.ToString() : "")"/>
                 </div>
 
                 <div style="flex:1 1 200px;">
                     <label style="display:block; margin-bottom:6px;">Количество испытаний</label>
                     <input type="number" id="numberOfTrialsUnit" step="1"
-                           placeholder="n" class="form-input" style="width:100%;" value="@(Model.Input?.NumberOfTrials / (int)(Model.Input?.Period ?? TimePeriod.Day))"/>
+                           placeholder="n" class="form-input" style="width:100%;"
+                           value="@(hasValidInput ? userNUnits.ToString() : "")"/>
                 </div>
 
                 <div style="flex:1 1 200px;">
@@ -85,20 +147,19 @@
             </div>
 
             @{
-                var filters = new WeatherFiltersViewModel()
-                {
-                    Input = Model.Input,
-                    ByAverage = Model.ByAverage,
-                    SpanForAverageHours = Model.SpanForAverageHours
-                };
+            var filters = new WeatherFiltersViewModel()
+            {
+            Input = Model.Input,
+            ByAverage = Model.ByAverage,
+            SpanForAverageHours = Model.SpanForAverageHours
+            };
             }
 
+            <input type="hidden" id="amountSuccessHours" name="Input.AmountSuccess" value="@(Model.Input?.AmountSuccess ?? 0)"/>
+            <input type="hidden" id="numberOfTrialsHours" name="Input.NumberOfTrials" value="@(Model.Input?.NumberOfTrials ?? 0)"/>
 
-            <input type="hidden" id="amountSuccessHours" name="Input.AmountSuccess"/>
-            <input type="hidden" id="numberOfTrialsHours" name="Input.NumberOfTrials"/>
-            
-            <partial name="_WeatherFilters" model = "filters"/>
-            
+            <partial name="_WeatherFilters" model="filters"/>
+
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px;">
                 <a class="btn outline" href="@Url.Action("Analysis", "Stats")">Сброс</a>
                 <button type="submit" class="btn primary">Вычислить вероятность</button>
@@ -107,3 +168,236 @@
     </div>
 </section>
 
+@if (safeProbabilities != null && xAxisLabels.Any())
+{
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    function convertToHours() {
+        const periodSelect = document.getElementById('periodDropdown');
+        const period = parseInt(periodSelect.value);
+
+        const amountSuccessUnit = document.getElementById('amountSuccessUnit');
+        const numberOfTrialsUnit = document.getElementById('numberOfTrialsUnit');
+
+        const amountSuccessHours = document.getElementById('amountSuccessHours');
+        const numberOfTrialsHours = document.getElementById('numberOfTrialsHours');
+
+        const kValue = parseInt(amountSuccessUnit.value) || 0;
+        const nValue = parseInt(numberOfTrialsUnit.value) || 0;
+
+        amountSuccessHours.value = kValue * period;
+        numberOfTrialsHours.value = nValue * period;
+
+        return true;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (document.getElementById('amountSuccessHours')) {
+            convertToHours();
+        }
+
+        setTimeout(function() {
+            const ctx = document.getElementById('probabilityChart');
+            if (!ctx) return;
+
+            const originalXLabels = @Html.Raw(JsonSerializer.Serialize(xAxisLabels, jsonOptions));
+            const originalProbabilities = @Html.Raw(JsonSerializer.Serialize(safeProbabilities, jsonOptions));
+
+            const userK = @userKUnits;
+            const userN = @userNUnits;
+            const userKIndex = @userKIndex;
+
+            const maxProbability = Math.max(...originalProbabilities);
+
+            let currentChart = null;
+            let currentFilterPercent = 100;
+
+            document.getElementById('filterContainer').style.display = 'block';
+
+            const rangeInput = document.getElementById('probabilityRange');
+            const numberInput = document.getElementById('probabilityPercent');
+
+            rangeInput.addEventListener('input', function() {
+                numberInput.value = this.value;
+            });
+
+            numberInput.addEventListener('input', function() {
+                let value = parseInt(this.value);
+                if (value < 0) value = 0;
+                if (value > 100) value = 100;
+                this.value = value;
+                rangeInput.value = value;
+            });
+
+            function updateChart(xLabels, probabilities, userKIdx) {
+                if (currentChart) {
+                    currentChart.destroy();
+                }
+
+                const currentMaxProbability = probabilities.length > 0 ? Math.max(...probabilities) : 0;
+                const yAxisMax = currentMaxProbability > 0 ? currentMaxProbability * 1.1 : 1;
+
+                let minK = 0;
+                let maxK = userN;
+
+                if (xLabels.length > 0) {
+                    minK = Math.min(...xLabels);
+                    maxK = Math.max(...xLabels);
+                }
+
+                if (xLabels.length === 0) {
+                    minK = 0;
+                    maxK = userN;
+                }
+
+                minK = Math.floor(minK);
+                maxK = Math.ceil(maxK);
+
+                const xAxisLabels = [];
+                for (let i = minK; i <= maxK; i++) {
+                    xAxisLabels.push(i);
+                }
+
+                const chartData = new Array(xAxisLabels.length).fill(NaN);
+
+                for (let i = 0; i < xLabels.length; i++) {
+                    const kValue = xLabels[i];
+                    const dataIndex = xAxisLabels.indexOf(kValue);
+                    if (dataIndex !== -1) {
+                        chartData[dataIndex] = probabilities[i];
+                    }
+                }
+
+                let chartUserKIndex = -1;
+                if (userKIdx !== -1 && xLabels[userKIdx] !== undefined) {
+                    chartUserKIndex = xAxisLabels.indexOf(xLabels[userKIdx]);
+                }
+
+                currentChart = new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: xAxisLabels,
+                        datasets: [{
+                            label: 'Вероятность P(k)',
+                            data: chartData,
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: function(context) {
+                                const index = context.dataIndex;
+                                return index === chartUserKIndex ? 'rgb(255, 99, 132)' : 'rgb(75, 192, 192)';
+                            },
+                            pointRadius: function(context) {
+                                const index = context.dataIndex;
+                                const value = context.dataset.data[index];
+                                if (index === chartUserKIndex) {
+                                    return 6;
+                                }
+                                return isNaN(value) ? 0 : 3;
+                            },
+                            pointHoverRadius: function(context) {
+                                const index = context.dataIndex;
+                                return index === chartUserKIndex ? 8 : 5;
+                            },
+                            spanGaps: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Количество совпадений (k)'
+                                },
+                                min: minK,
+                                max: maxK,
+                                ticks: {
+                                    stepSize: Math.max(1, Math.floor((maxK - minK) / 10)),
+                                    callback: function(value) {
+                                        return Number.isInteger(value) ? value : '';
+                                    }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Вероятность (%)'
+                                },
+                                beginAtZero: true,
+                                suggestedMax: yAxisMax,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value.toFixed(2) + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = context.parsed.y;
+                                        if (isNaN(value)) {
+                                            return null;
+                                        }
+                                        return `P(k=${context.label}) = ${value.toFixed(3)}%`;
+                                    },
+                                    filter: function(tooltipItem) {
+                                        return !isNaN(tooltipItem.parsed.y);
+                                    }
+                                }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        }
+                    }
+                });
+            }
+
+            function applyFilter() {
+                const percent = parseInt(numberInput.value);
+                currentFilterPercent = percent;
+
+                const thresholdPercent = 100 - percent;
+                const threshold = (thresholdPercent / 100) * maxProbability;
+
+                const filteredXLabels = [];
+                const filteredProbabilities = [];
+                let filteredUserKIndex = -1;
+
+                for (let i = 0; i < originalProbabilities.length; i++) {
+                    if (originalProbabilities[i] >= threshold) {
+                        filteredXLabels.push(originalXLabels[i]);
+                        filteredProbabilities.push(originalProbabilities[i]);
+
+                        if (originalXLabels[i] === userK) {
+                            filteredUserKIndex = filteredXLabels.length - 1;
+                        }
+                    }
+                }
+
+                updateChart(filteredXLabels, filteredProbabilities, filteredUserKIndex);
+            }
+
+            function resetFilter() {
+                numberInput.value = 100;
+                rangeInput.value = 100;
+                currentFilterPercent = 100;
+                applyFilter();
+            }
+
+            applyFilter();
+
+            document.getElementById('applyFilter').addEventListener('click', applyFilter);
+            document.getElementById('resetFilter').addEventListener('click', resetFilter);
+
+        }, 100);
+    });
+</script>
+}
