@@ -9,6 +9,10 @@ public class AnalysisRangeDto
     public int SpanForAverageHours { get; set; } = 24;
     public double? ResultPercent { get; set; } = null;
     public double Percent { get; set; } = 0;
+    
+    public List<double>? Probabilities { get; set; }
+    public List<int>? KValues { get; set; }
+    public int MaxK { get; set; }
 
 }
 

@@ -218,6 +218,16 @@ public class StatsController : Controller
         if (n != -1 && k != -1)
         { 
             resultPercent = CalculateBinomialProbability(n, k, analysisDto.Percent);
+            
+            analysisDto.MaxK = n;
+            analysisDto.KValues = new List<int>();
+            analysisDto.Probabilities = new List<double>();
+        
+            for (int i = 0; i <= n; i++)
+            {
+                analysisDto.KValues.Add(i);
+                analysisDto.Probabilities.Add(CalculateBinomialProbability(n, i, analysisDto.Percent));
+            }
         }
         analysisDto.ResultPercent = resultPercent;
         
@@ -397,21 +407,53 @@ public class StatsController : Controller
 
     private double CalculateBinomialProbability(int n, int k, double percent)
     {
-        if (n != -1 && k != -1)
+        if (n <= 0 || k < 0 || k > n || percent < 0 || percent > 100)
         {
-            double p = percent / 100.0;
+            return 0.0;
+        }
+
+        double p = percent / 100.0;
+    
+        // Проверка граничных случаев
+        if (p == 0.0)
+        {
+            return k == 0 ? 100.0 : 0.0;
+        }
+    
+        if (p == 1.0)
+        {
+            return k == n ? 100.0 : 0.0;
+        }
+    
+        try
+        {
             double logResult = 0.0;
-            
+        
             for (int i = 1; i <= k; i++)
             {
                 logResult += Math.Log(n - i + 1) - Math.Log(i);
             }
-            
-            logResult += k * Math.Log(p) + (n - k) * Math.Log(1 - p);
-            
-            return Math.Exp(logResult) * 100;
+        
+            // Безопасное вычисление логарифмов
+            if (p > 0 && p < 1)
+            {
+                logResult += k * Math.Log(p) + (n - k) * Math.Log(1 - p);
+            }
+        
+            double result = Math.Exp(logResult) * 100;
+        
+            // Проверка на корректность результата
+            if (double.IsNaN(result) || double.IsInfinity(result) || result < 0 || result > 100)
+            {
+                return 0.0;
+            }
+        
+            return result;
         }
-        return 0;
+        catch
+        {
+            return 0.0;
+        }
     }
 
     
